@@ -9,20 +9,31 @@
 
 #include "iwave.h"
 
-constexpr int screenWidth = 640, screenHeight = 480;
-constexpr int simWidth = screenWidth / 4;
-constexpr int simHeight = screenHeight / 4;
+constexpr int screenWidth = 1280, screenHeight = 720;
+constexpr int divFactor = 8;
+constexpr int simWidth = screenWidth / divFactor;
+constexpr int simHeight = screenHeight / divFactor;
+
+constexpr int targetFps = 60;
+constexpr float targetFrameTime = 1.0f / static_cast<float>(targetFps);
 
 uint8_t pix_from_normalized(float value) {
 	return static_cast<uint8_t>((value * 255.0f) + 0.5f);
 }
+
+Vector2 mousePos, prevMousePos;
+
+struct Point2 {
+	int x;
+	int y;
+};
 
 int main(int argc, char** argv) {
 	InitWindow(screenWidth, screenHeight, "water test");
 	ClearWindowState(FLAG_WINDOW_RESIZABLE);
 	SetTargetFPS(60);
 
-	IWaveSurface surface(simWidth, simHeight, 6);
+	IWaveSurface surface(simWidth, simHeight, 4);
 
 	// create grayscale water texture
 	Texture waterTexture;
@@ -35,18 +46,24 @@ int main(int argc, char** argv) {
 	}
 
 	// main loop
+	mousePos = GetMousePosition();
 	while (!WindowShouldClose())
 	{
-		Vector2 mousePos = GetMousePosition();
-		int simX = static_cast<int>(mousePos.x / static_cast<float>(screenWidth) * static_cast<float>(simWidth));
-		int simY = static_cast<int>(mousePos.y / static_cast<float>(screenHeight) * static_cast<float>(simHeight));
+		prevMousePos = mousePos;
+		mousePos = GetMousePosition();
 
+		Point2 simPos = {
+			static_cast<int>(mousePos.x / static_cast<float>(screenWidth) * static_cast<float>(simWidth)),
+			static_cast<int>(mousePos.y / static_cast<float>(screenHeight) * static_cast<float>(simHeight))
+		};
 
 		if (IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
-			for(int y = -5; y <= 5; y++) {
+			for (int y = -5; y <= 5; y++) {
 				for (int x = -5; x <= 5; x++) {
-					float r = std::max(0.0f, 5.0f - sqrtf(static_cast<float>((y * y) + (x * x))));
-					surface.place_source(simX + x, simY + y, r);
+					float r = 5.0f - sqrtf(static_cast<float>((y * y) + (x * x)));
+					if (r > 0.0f) {
+						surface.place_source(simPos.x + x, simPos.y + y, r);
+					}
 				}
 			}
 		} else if (IsMouseButtonDown(MOUSE_BUTTON_RIGHT)) {
@@ -54,7 +71,7 @@ int main(int argc, char** argv) {
 				for (int x = -2; x <= 2; x++) {
 					//float r = sqrtf(static_cast<float>((y * y) + (x * x))) / 5.0f;
 					//if(r < 1.0f)
-					surface.set_obstruction(simX + x, simY + y, 0.0f);
+					surface.set_obstruction(simPos.x + x, simPos.y + y, 0.0f);
 				}
 			}
 		}
@@ -63,7 +80,13 @@ int main(int argc, char** argv) {
 			surface.reset();
 		}
 
-		surface.sim_frame(1.0f / 30.0f);
+		float frameTime = GetFrameTime();
+
+		// just so that dragging the window doesn't mess up the simulation
+		if(frameTime > targetFrameTime)
+			surface.sim_frame(targetFrameTime);
+		else
+			surface.sim_frame(frameTime);
 
 		BeginDrawing();
 		ClearBackground(RAYWHITE);
@@ -98,9 +121,8 @@ int main(int argc, char** argv) {
 			WHITE
 		);
 
-		int fps = GetFPS();
 		char fpsString[32] = { 0 };
-		snprintf(fpsString, 24, "FPS: %d\0", fps);
+		snprintf(fpsString, 31, "%f ms", frameTime);
 		DrawText(fpsString, 16, 16, 32, PURPLE);
 		EndDrawing();
 	}

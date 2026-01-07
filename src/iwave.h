@@ -19,6 +19,8 @@ class IWaveSurface {
 
 	int bufferCount = 0;
 	int bufferSize = 0;
+
+	int get_kernel_reflected_idx(int x, int y);
 public:
 	IWaveSurface(int w, int h, int p);
 	~IWaveSurface();

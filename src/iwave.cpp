@@ -18,10 +18,10 @@ IWaveSurface::IWaveSurface(int w, int h, int p) {
 	// CFL condition says that https://en.wikipedia.org/wiki/Courant%E2%80%93Friedrichs%E2%80%93Lewy_condition 
 	// accelerationTerm <= (0.5/delta)^2 and velocityDamping <= 2/delta
 
-	// so for 30fps:
-	// accelerationTerm <= 225 and velocityDamping <= 60
-	accelerationTerm = 10.0f;
-	velocityDamping = 0.76f;
+	// so for 30fps: accelerationTerm <= 225 and velocityDamping <= 60
+	// and for 60fps: accelerationTerm <= 899 and velocityDamping <= 120
+	accelerationTerm = 20.0f;
+	velocityDamping = 1.0f;
 
 	// allocate grid memory
 	currentGrid = DOALLOC;
@@ -146,6 +146,19 @@ static float move_towards(float current, float target, float step) {
 		return current;
 }
 
+int IWaveSurface::get_kernel_reflected_idx(int x, int y) {
+	// handle boundaries by reflecting
+	x = labs(x);
+	y = labs(y);
+
+	if (x >= width)
+		x = (2 * width) - x - 1;
+	if (y >= height)
+		y = (2 * height) - y - 1;
+
+	return get_idx(x, y);
+}
+
 void IWaveSurface::sim_frame(float delta) {
 	// preprocess sources/obstructions
 	for (int y = 0; y < height; y++) {
@@ -168,6 +181,7 @@ void IWaveSurface::sim_frame(float delta) {
 	for (int y = 0; y < height; y++) {
 		for (int x = 0; x < width; x++) {
 
+			// kernel value at the center is 1.0f, so we don't need to read from it
 			float sum = 0.0f;
 
 			for (int dy = 0; dy < kernelLength; dy++) {
@@ -177,19 +191,8 @@ void IWaveSurface::sim_frame(float delta) {
 					int nx = x + dx - kernelRadius;
 					int ny = y + dy - kernelRadius;
 
-					// handle boundaries by reflecting
-					if (nx < 0)
-						nx = -nx;
-					else if (nx >= width)
-						nx = (2 * width) - nx - 1;
-
-					if (ny < 0)
-						ny = -ny;
-					else if (ny >= height)
-						ny = (2 * height) - ny - 1;
-
 					// convolving with currentGrid
-					sum += currentGrid[get_idx(nx, ny)] * kernelValue;
+					sum += currentGrid[get_kernel_reflected_idx(nx, ny)] * kernelValue;
 				}
 			}
 
