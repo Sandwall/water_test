@@ -1,2 +1,2 @@
 # Libraries
-Similarly to the `lib` folder, this project only uses raylib. Just go and download the (latest release)[github.com/raysan5/raylib/releases/], and place the header files in the `include` folder of the release into this directory.
+Similarly to the `lib` folder, this project only uses raylib. Just go and download the [latest release](github.com/raysan5/raylib/releases/), and place the header files in the `include` folder of the release into this directory.

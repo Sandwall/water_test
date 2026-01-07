@@ -2,7 +2,7 @@
 
 This is essentially a place for me to test out implementing a few algorithms for simulating water surfaces for video games.
 
-I think I've currently implemented a CPU-side version of the iWave algorithm presented in Jerry Tessendorf's [Interactive Water Surfaces](https://jtessen.people.clemson.edu/reports/papers_files/Interactive_Water_Surfaces.pdf) paper, and eventually I'm planning on doing the same for the eWave algorithm presented in Soumitra Goswami's thesis (INTERACTIVE WATER SURFACES USING GPU BASED eWAVE ALGORITHM IN A GAME PRODUCTION ENVIRONMENT)[https://jtessen.people.clemson.edu/students/goswami_thesis.pdf].
+I think I've currently implemented a CPU-side version of the iWave algorithm presented in Jerry Tessendorf's [Interactive Water Surfaces](https://jtessen.people.clemson.edu/reports/papers_files/Interactive_Water_Surfaces.pdf) paper, and eventually I'm planning on doing the same for the eWave algorithm presented in Soumitra Goswami's thesis [INTERACTIVE WATER SURFACES USING GPU BASED eWAVE ALGORITHM IN A GAME PRODUCTION ENVIRONMENT](https://jtessen.people.clemson.edu/students/goswami_thesis.pdf).
 
 ## Compilation
 To compile, you need to have Visual Studio installed with the C++ workload abd install raylib to the `lib` subfolder (according to the README file in there). It should be possible to open the `.slnx` file as a solution and hit F5 to compile and run the program.
