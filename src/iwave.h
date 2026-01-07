@@ -30,9 +30,11 @@ public:
 		return x + (y * width);
 	}
 
-	void place_source(int x, int y);
+	void place_source(int x, int y, float newValue);
+	void set_obstruction(int x, int y, float newValue);
 	void sim_frame(float delta);
 
-	float sample(int x, int y);
+	float get_height(int x, int y);
+	float get_obstruction(int x, int y);
 	void reset();
 };

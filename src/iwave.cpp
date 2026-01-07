@@ -88,18 +88,35 @@ IWaveSurface::~IWaveSurface() {
 	DOFREE(derivativeKernel);
 }
 
-void IWaveSurface::place_source(int x, int y) {
+void IWaveSurface::place_source(int x, int y, float newValue) {
 	int idx = get_idx(x, y);
 	if (idx < 0) return;
 
-	source[idx] = 1.0f;
+	source[idx] = newValue;
 }
 
-float IWaveSurface::sample(int x, int y) {
+// sets new values based on the minimum
+void IWaveSurface::set_obstruction(int x, int y, float newValue) {
+	int idx = get_idx(x, y);
+	if (idx < 0) return;
+
+	// take min of newValue and current obstruction value
+	if (newValue < obstruction[idx])
+		obstruction[idx] = newValue;
+}
+
+float IWaveSurface::get_height(int x, int y) {
 	int idx = get_idx(x, y);
 	if (idx < 0) return 0.5f;
 
-	return prevGrid[idx];
+	return currentGrid[idx];
+}
+
+float IWaveSurface::get_obstruction(int x, int y) {
+	int idx = get_idx(x, y);
+	if (idx < 0) return 1.0f;
+
+	return obstruction[idx];
 }
 
 void IWaveSurface::reset() {
@@ -139,8 +156,6 @@ void IWaveSurface::sim_frame(float delta) {
 
 			// apply source & obstructions
 			currentGrid[idx] += source[idx];
-			
-			// will fix obstructions when propagation displays properly
 			currentGrid[idx] *= obstruction[idx];
 
 			// decay source
