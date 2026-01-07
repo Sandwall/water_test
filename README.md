@@ -11,6 +11,6 @@ To compile, you need to have Visual Studio installed with the C++ workload abd i
 While the program is running, you can left click/drag left click on the window to create sources, which will displace the surface. You can hit space to reset the simulation to the initial state.
 
 ## Implementation
-Right now, I'm using (raylib)[https://github.com/raysan5/raylib] to create a window and drawing textures to the screen, though the actual program here is not doing much more than this on the GPU-side. The water surface stuff is being done CPU-side, and then being uploaded to the GPU as a texture (which is super inefficient because it spends time CPU to GPU upload time unnecessarily). In addition, many of the convolution optimization techniques mentioned in the iWave paper have not been currently implemented.
+Right now, I'm using [raylib](https://github.com/raysan5/raylib) to create a window and drawing textures to the screen, though the actual program here is not doing much more than this on the GPU-side. The water surface stuff is being done CPU-side, and then being uploaded to the GPU as a texture (which is super inefficient because it spends time CPU to GPU upload time unnecessarily). In addition, many of the convolution optimization techniques mentioned in the iWave paper have not been currently implemented.
 
 I'm thinking of moving the simulation to the GPU later through either fragment or compute shaders, so that it's more viable for in a game scenario.
