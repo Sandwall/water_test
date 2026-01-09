@@ -1,14 +1,11 @@
 .vs/
 .vscode/
 
+build/
 bin/
 obj/
-lib/*
-include/*.h
 
-!include/README.md
-!lib/README.md
-
+*.user
 *.dll
 *.exe
 *.obj

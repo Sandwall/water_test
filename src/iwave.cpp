@@ -9,11 +9,44 @@
 #define DOFREE(x) free(x); x = nullptr;
 #define SETZERO(x) memset(x, 0, bufferSize)
 
+//
+// private
+//
+int IWaveSurface::get_idx(int x, int y) const {
+	if (x < 0 || x >= width || y < 0 || y >= height)
+		return -1;
+
+	return x + (y * width);
+}
+
+int IWaveSurface::get_kernel_reflected_idx(int x, int y) const {
+	// handle boundaries by reflecting
+	x = labs(x);
+	y = labs(y);
+
+	if (x >= width)
+		x = (2 * width) - x - 1;
+	if (y >= height)
+		y = (2 * height) - y - 1;
+
+	return get_idx(x, y);
+}
+
+//
+// public
+//
 IWaveSurface::IWaveSurface(int w, int h, int p) {
 	width = w;
 	height = h;
 	bufferCount = width * height;
 	bufferSize = sizeof(float) * bufferCount;
+
+	// allocate display texture
+	waterPixels = (uint32_t*)malloc(sizeof(uint32_t) * width * height);
+	Image waterImage = GenImageColor(width, height, BLACK);
+	ImageFormat(&waterImage, PIXELFORMAT_UNCOMPRESSED_R8G8B8A8);
+	waterTexture = LoadTextureFromImage(waterImage);
+	UnloadImage(waterImage);
 
 	// CFL condition says that https://en.wikipedia.org/wiki/Courant%E2%80%93Friedrichs%E2%80%93Lewy_condition 
 	// accelerationTerm <= (0.5/delta)^2 and velocityDamping <= 2/delta
@@ -80,6 +113,7 @@ IWaveSurface::IWaveSurface(int w, int h, int p) {
 }
 
 IWaveSurface::~IWaveSurface() {
+	UnloadTexture(waterTexture);
 	DOFREE(currentGrid);
 	DOFREE(prevGrid);
 	DOFREE(verticalDerivative);
@@ -88,31 +122,45 @@ IWaveSurface::~IWaveSurface() {
 	DOFREE(derivativeKernel);
 }
 
-void IWaveSurface::place_source(int x, int y, float newValue) {
-	int idx = get_idx(x, y);
-	if (idx < 0) return;
+void IWaveSurface::place_source(int x, int y, float r, float strength) {
+	int s = static_cast<float>(r + 0.5f);
 
-	source[idx] = newValue;
+	for (int iy = -s; iy <= s; iy++) {
+		for (int ix = -s; ix <= s; ix++) {
+			float ir = 5.0f - sqrtf(static_cast<float>((iy * iy) + (ix * ix)));
+			if (ir > 0.0f) {
+				int idx = get_idx(x + ix, y + iy);
+				if (idx < 0) return;
+
+				source[idx] = ir;
+			}
+		}
+	}
 }
 
 // sets new values based on the minimum
-void IWaveSurface::set_obstruction(int x, int y, float newValue) {
-	int idx = get_idx(x, y);
-	if (idx < 0) return;
+void IWaveSurface::set_obstruction(int x, int y, int rx, int ry, float strength) {
+	for (int iy = -2; iy <= 2; iy++) {
+		for (int ix = -2; ix <= 2; ix++) {
+			int idx = get_idx(x + ix, y + iy);
+			if (idx < 0) return;
 
-	// take min of newValue and current obstruction value
-	if (newValue < obstruction[idx])
-		obstruction[idx] = newValue;
+			// take min of newValue and current obstruction value
+			if (strength < obstruction[idx])
+				obstruction[idx] = strength;
+		}
+	}
+
 }
 
-float IWaveSurface::get_height(int x, int y) {
+float IWaveSurface::get_height(int x, int y) const {
 	int idx = get_idx(x, y);
 	if (idx < 0) return 0.5f;
 
 	return currentGrid[idx];
 }
 
-float IWaveSurface::get_obstruction(int x, int y) {
+float IWaveSurface::get_obstruction(int x, int y) const {
 	int idx = get_idx(x, y);
 	if (idx < 0) return 1.0f;
 
@@ -144,19 +192,6 @@ static float move_towards(float current, float target, float step) {
 	}
 	else
 		return current;
-}
-
-int IWaveSurface::get_kernel_reflected_idx(int x, int y) {
-	// handle boundaries by reflecting
-	x = labs(x);
-	y = labs(y);
-
-	if (x >= width)
-		x = (2 * width) - x - 1;
-	if (y >= height)
-		y = (2 * height) - y - 1;
-
-	return get_idx(x, y);
 }
 
 void IWaveSurface::sim_frame(float delta) {
@@ -212,4 +247,34 @@ void IWaveSurface::sim_frame(float delta) {
 
 		prevGrid[i] = temp;
 	}
+}
+
+Texture* IWaveSurface::get_display() {
+	if (!waterPixels) return nullptr;;
+
+	// update water texture
+	float extents = 5.0f;
+	if (waterPixels) {
+		for (int y = 0; y < height; y++) {
+			for (int x = 0; x < width; x++) {
+				uint8_t* pixel = reinterpret_cast<uint8_t*>(&waterPixels[x + (y * width)]);
+				uint8_t& red = pixel[0];
+				uint8_t& green = pixel[1];
+				uint8_t& blue = pixel[2];
+				uint8_t& alpha = pixel[3];
+
+				green = 0;
+				alpha = 255;
+
+				float surfaceValue = std::clamp(get_height(x, y), -extents, extents);
+				// the entire screen will be half blue when each surface value is at 0.0f
+				blue = pix_from_normalized((surfaceValue + extents) / (extents * 2.0f));
+
+				red = pix_from_normalized(1.0f - get_obstruction(x, y));
+			}
+		}
+	}
+
+	UpdateTexture(waterTexture, waterPixels);
+	return &waterTexture;
 }

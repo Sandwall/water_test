@@ -2,5 +2,6 @@
   <Configurations>
     <Platform Name="x64" />
   </Configurations>
+  <Project Path="raylib/projects/VS2022/raylib/raylib.vcxproj" Id="e89d61ac-55de-4482-afd4-df7242ebc859" />
   <Project Path="water_test.vcxproj" Id="20be588d-2955-4c18-9d13-967070604f01" />
 </Solution>

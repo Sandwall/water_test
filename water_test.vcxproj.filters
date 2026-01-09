@@ -21,12 +21,21 @@
     <ClCompile Include="src\iwave.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\iwave_gpu.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\ewave.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\iwave.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\surface_sim.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\iwave_gpu.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

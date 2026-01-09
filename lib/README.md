@@ -1,2 +1,0 @@
-# Libraries
-The only library being used in this project is raylib. Just go and download the [latest release](github.com/raysan5/raylib/releases/), and place the files in the `lib` folder of the release into an `x64` folder in this directory.
