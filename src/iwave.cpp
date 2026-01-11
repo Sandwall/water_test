@@ -249,8 +249,8 @@ void IWaveSurface::sim_frame(float delta) {
 	}
 }
 
-Texture* IWaveSurface::get_display() {
-	if (!waterPixels) return nullptr;;
+Texture IWaveSurface::get_display() {
+	if (!waterPixels) return { 0 };
 
 	// update water texture
 	float extents = 5.0f;
@@ -276,5 +276,7 @@ Texture* IWaveSurface::get_display() {
 	}
 
 	UpdateTexture(waterTexture, waterPixels);
-	return &waterTexture;
+
+	// texture struct is 20 bytes, surely it it isn't too much to just return it directly
+	return waterTexture;
 }

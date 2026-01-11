@@ -5,7 +5,7 @@ This is essentially a place for me to test out implementing a few algorithms for
 I think I've currently implemented a CPU-side version of the iWave algorithm presented in Jerry Tessendorf's [Interactive Water Surfaces](https://jtessen.people.clemson.edu/reports/papers_files/Interactive_Water_Surfaces.pdf) paper, and eventually I'm planning on doing the same for the eWave algorithm presented in Soumitra Goswami's thesis [INTERACTIVE WATER SURFACES USING GPU BASED eWAVE ALGORITHM IN A GAME PRODUCTION ENVIRONMENT](https://jtessen.people.clemson.edu/students/goswami_thesis.pdf).
 
 ## Compilation
-To compile, you need to have Visual Studio installed with the C++ workload abd install raylib to the `lib` subfolder (according to the README file in there). It should be possible to open the `.slnx` file as a solution and hit F5 to compile and run the program.
+Make to sure clone with submodules (`git clone --recursive <repository-url>`). To compile, you need to have Visual Studio installed with the C++ workload. Change 
 
 ## Usage
 While the program is running, you can left click/drag left click on the window to create sources, which will displace the surface, and you can do the same for right click to create obstructions. You can hit space to reset the simulation to the initial state.

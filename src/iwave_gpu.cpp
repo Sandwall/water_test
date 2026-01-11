@@ -4,6 +4,9 @@
 #include <math.h>
 #include <algorithm>
 
+#include <rlgl.h>
+#include <external/glad.h>
+
 // NOTE: i'm lazy lol
 #define DOALLOC static_cast<float*>(malloc(bufferSize))
 #define DOFREE(x) free(x); x = nullptr;
@@ -28,18 +31,8 @@ void main() {
 }
 )";
 
-/* TODO: put simulation logic here
- * 
- * I'll have to think if the simulation has to be done in 3 passes again
- * or maybe if I can condense it into fewer.
- * 
- * I also don't think Raylib supports MRT (multiple render targets) 
- * but I guess conceptually it would make writing the shaders a bit simpler
- * 
- * Then again if we just used compute shaders, choosing the 
- */
+/* Here's the raylib default fragment shader for OpenGL 3.3, just for reference:
 
-const char* simShaderFragSource = R"(
 #version 330
 
 in vec2 fragTexCoord;
@@ -54,16 +47,106 @@ void main() {
 	vec4 texelColor = texture(currentGrid, fragTexCoord);
 	finalColor = texelColor * colDiffuse * fragColor;
 }
+
+*/
+
+const char* preprocessFragSource = /* fragment shader */ R"(
+#version 330
+
+in vec2 fragTexCoord;
+in vec4 fragColor;
+
+out vec4 nextValue;
+
+uniform sampler2D currentGrid;
+uniform sampler2D sourceObstruct;
+
+void main() {
+	float currentValue = texture(currentGrid, fragTexCoord).r;
+	vec2 soValue = texture(sourceObstruct, fragTexCoord).xy;
+
+	currentValue += soValue.x;
+	currentValue *= soValue.y;
+
+	// don't care about the other 3 components...
+	nextValue.x = currentValue;
+}
 )";
 
-static Texture create_tex_format(int w, int h, int format = PIXELFORMAT_UNCOMPRESSED_R32) {
-	Image img = GenImageColor(w, h, WHITE);
-	ImageFormat(&img, format);
-	Texture tex = LoadTextureFromImage(img);
-	UnloadImage(img);
+const char* convolutionFragSource = /* fragment shader */ R"(
+#version 330
 
-	return tex;
+in vec2 fragTexCoord;
+in vec4 fragColor;
+
+out vec4 nextValue;
+
+uniform sampler2D currentGrid;
+uniform sampler2D kernel;
+uniform vec2 gridCellSize;
+uniform int kernelRadius;
+
+// this function will take much longer the farther out the requested coordinates are
+// we shouldn't really run into issues with it because the kernel is a constant size
+// which means that any reqested coordinates have a constant bound on how fara out they can bee
+vec2 reflect_uv(vec2 uv) {
+	while(uv.x < 0.0 && uv.x > 1.0) {
+		uv.x = abs(uv.x);
+		if(uv.x > 1.0)
+			uv.x = 1.0 - uv.x;
+	}
+
+	while(uv.y < 0.0 && uv.y > 1.0) {
+		uv.y = abs(uv.y);
+		if(uv.y > 1.0)
+			uv.y = 1.0 - uv.y;
+	}
+
+	return uv;
 }
+
+void main() {
+	float sum = 0.0f;
+
+	for(int y = -kernelRadius; y <= kernelRadius; y++) {
+		for(int x = -kernelRadius; x <= kernelRadius; x++) {
+			vec2 offsetUv = vec2(kernelRadius, kernelRadius) * gridCellSize;
+			float kernelValue = texture(kernel, offsetUv + 0.5).r;
+
+			offsetUv = reflect_uv(fragTexCoord + offsetUv);
+			sum += kernelValue + texture(currentGrid, offsetUv).r;
+		}
+	}
+
+	// like preprocess, we don't care about .yzw
+	nextValue.x = sum;
+}
+)";
+
+const char* propagateFragSource = /* fragment shader */ R"(
+#version 330
+
+in vec2 fragTexCoord;
+in vec4 fragColor;
+
+out vec4 nextValue;
+
+uniform sampler2D currentGrid;
+uniform sampler2D prevGrid;
+uniform sampler2D verticalDerivative;
+uniform vec3 coefficients; // these are computed once on the CPU each frame
+
+void main() {
+	float currentValue = texture(currentGrid, fragTexCoord).r;
+	float prevValue = texture(prevGrid, fragTexCoord).r;
+	float derivativeValue = texture(verticalDerivative, fragTexCoord).r;
+
+	nextValue.x = currentValue * coefficients.x
+		+ prevValue * coefficients.y
+		+ derivativeValue * coefficients.z;
+}
+
+)";
 
 IWaveSurfaceGPU::IWaveSurfaceGPU(int w, int h, int p) {
 	width = w;
@@ -77,22 +160,38 @@ IWaveSurfaceGPU::IWaveSurfaceGPU(int w, int h, int p) {
 	accelerationTerm = 20.0f;
 	velocityDamping = 1.0f;
 
-	// create grids on gpu
-	simShader = LoadShaderFromMemory(defaultVertexSource, simShaderFragSource);
-
-	grids[0] = create_tex_format(width, height);
-	grids[1] = create_tex_format(width, height);
-	grids[2] = create_tex_format(width, height);
-	sourceObstruct = create_tex_format(width, height, PIXELFORMAT_UNCOMPRESSED_R32G32B32A32);
+	// load shaders & create grids on gpu
+	preprocessShader = LoadShaderFromMemory(defaultVertexSource, preprocessFragSource);
+	convolutionShader = LoadShaderFromMemory(defaultVertexSource, convolutionFragSource);
+	propagateShader = LoadShaderFromMemory(defaultVertexSource, propagateFragSource);
+	currentGrid = TextureTarget::create(width, height);
+	prevGrid = TextureTarget::create(width, height);
+	pingpongGrid = TextureTarget::create(width, height);
+	verticalDerivative = TextureTarget::create(width, height);
+	sourceObstruct = TextureTarget::create(width, height, PIXELFORMAT_UNCOMPRESSED_R32G32B32A32);
 
 	// allocate and compute derivative kernel
 	kernelRadius = p;
-	kernel = compute_kernel(p);
+	kernelTexture = compute_kernel(p);
+
+	// cache shader uniform locations
+	p1_currentGrid = GetShaderLocation(preprocessShader, "currentGrid");
+	p1_sourceObstruct = GetShaderLocation(preprocessShader, "sourceObstruct");
+
+	p2_currentGrid = GetShaderLocation(convolutionShader, "currentGrid");
+	p2_kernel = GetShaderLocation(convolutionShader, "kernel");
+	p2_gridCellSize = GetShaderLocation(convolutionShader, "gridCellSize");
+	p2_kernelRadius = GetShaderLocation(convolutionShader, "kernelRadius");
+
+	p3_currentGrid = GetShaderLocation(propagateShader, "currentGrid");
+	p3_prevGrid = GetShaderLocation(propagateShader, "prevGrid");
+	p3_verticalDerivative = GetShaderLocation(propagateShader, "verticalDerivative");
+	p3_coefficients = GetShaderLocation(propagateShader, "coefficients");
 
 	reset();
 }
 
-Texture IWaveSurfaceGPU::compute_kernel(int radius) {
+unsigned int IWaveSurfaceGPU::compute_kernel(int radius) {
 	int kernelLength = (2 * radius) + 1;
 	float* derivativeKernel = static_cast<float*>(calloc(1, sizeof(float) * kernelLength * kernelLength));
 
@@ -139,8 +238,7 @@ Texture IWaveSurfaceGPU::compute_kernel(int radius) {
 		printf("\n");
 	}
 
-	Texture derivativeTexture = create_tex_format(kernelLength, kernelLength);
-	UpdateTexture(derivativeTexture, derivativeKernel);
+	unsigned int derivativeTexture = TextureTarget::create_only_tex(kernelLength, kernelLength, PIXELFORMAT_UNCOMPRESSED_R32, derivativeKernel);;
 	free(derivativeKernel);
 	return derivativeTexture;
 }
@@ -158,42 +256,92 @@ void IWaveSurfaceGPU::set_obstruction(int x, int y, int rx, int ry, float streng
 }
 
 void IWaveSurfaceGPU::reset() {
+	rlClearColor(0, 0, 0, 0);
 
-}
+	rlBindFramebuffer(RL_DRAW_FRAMEBUFFER, currentGrid.framebuffer);
+	rlClearScreenBuffers();
+	rlBindFramebuffer(RL_DRAW_FRAMEBUFFER, prevGrid.framebuffer);
+	rlClearScreenBuffers();
+	rlBindFramebuffer(RL_DRAW_FRAMEBUFFER, pingpongGrid.framebuffer);
+	rlClearScreenBuffers();
 
-static float move_towards(float current, float target, float step) {
-	float diff = target - current;
-	if (diff > 0.0f) {
-		if (diff < step)
-			return target;
+	rlBindFramebuffer(RL_DRAW_FRAMEBUFFER, verticalDerivative.framebuffer);
+	rlClearScreenBuffers();
 
-		return current + step;
-	}
-	else if (diff < 0.0f) {
-		if (diff > step)
-			return target;
-
-		return current - step;
-	}
-	else
-		return current;
+	rlBindFramebuffer(RL_DRAW_FRAMEBUFFER, sourceObstruct.framebuffer);
+	rlClearScreenBuffers();
 }
 
 void IWaveSurfaceGPU::sim_frame(float delta) {
-	// preprocess sources/obstructions
-	// want to render to grids[nextGrid], use grids[currentGrid] and sourceObstruct as input
+	// our steps are as follows:
+	// - render to pingpong, use sourceObstruct as input
+	// - render to verticalDerivative, use pingpong as input
+	// - render to currentGrid, use previousGrid as input, and read from current value of pingpong
+	// - render pingpong to previous
+	// - swap pingpong and current
 
+	//
+	// preprocess sources / obstructions
+	//
+
+	rlBindFramebuffer(RL_DRAW_FRAMEBUFFER, pingpongGrid.framebuffer);
+	rlEnableShader(preprocessShader.id);
+	//rlSetShader(preprocessShader.id, preprocessShader.locs);
+
+	rlSetUniformSampler(p1_currentGrid, currentGrid.texture);
+	rlSetUniformSampler(p1_sourceObstruct, sourceObstruct.texture);
+
+	rlLoadDrawQuad();
+
+	//
 	// convolve grid with kernel, put it into verticalDerivative
-	// we want to render to verticalDerivative, use grids[nextGrid] as an input
+	//
+	rlBindFramebuffer(RL_DRAW_FRAMEBUFFER, verticalDerivative.framebuffer);
+	rlEnableShader(convolutionShader.id);
+	//rlSetShader(convolutionShader.id, convolutionShader.locs);
 
-	// apply propagation - this is pretty much copied from tessendorf's "Wave Propagation" section
-	// we want to render to grids[currentGrid], use grids[nextGrid] as input (to represent the current grid)
-	// and use grids[prevGrid] as input to represent the previousGrid
+	rlSetUniformSampler(p2_currentGrid, pingpongGrid.texture);
+	rlSetUniformSampler(p2_kernel, kernelTexture);
+	float gridCellSize[2] = { 1.0f / static_cast<float>(width), 1.0f / static_cast<float>(height) };
+	rlSetUniform(p2_gridCellSize, gridCellSize, RL_SHADER_UNIFORM_VEC2, 1);
+	rlSetUniform(p2_kernelRadius, &kernelRadius, RL_SHADER_UNIFORM_INT, 1);
 
-	// now increment currentGrid
-	// this will make 
+	rlLoadDrawQuad();
+
+	//
+	// apply propagation
+	//
+	
+	rlBindFramebuffer(RL_DRAW_FRAMEBUFFER, currentGrid.framebuffer);
+	rlEnableShader(propagateShader.id);
+	//rlSetShader(propagateShader.id, propagateShader.locs);
+	rlSetUniformSampler(p3_currentGrid, pingpongGrid.texture);
+	rlSetUniformSampler(p3_prevGrid, prevGrid.texture);
+	rlSetUniformSampler(p3_verticalDerivative, verticalDerivative.texture);
+
+	// these mirror the coefficients of currentGrid, prevGrid, verticalDerivative in the CPU version
+	float alphaDt = velocityDamping * delta;
+	float coefficients[3] = {
+		(2.0f - alphaDt) / (1.0f + alphaDt),
+		-1.0f / (1.0f + alphaDt),
+		-accelerationTerm * delta * delta / (1.0f + alphaDt)
+	};
+	rlSetUniform(p3_coefficients, coefficients, RL_SHADER_UNIFORM_VEC3, 1);
+
+	rlLoadDrawQuad();
+
+	// requires us to compile raylib with GRAPHICS_API_OPENGL_43 #defined
+	glBindTexture(GL_TEXTURE_2D, pingpongGrid.texture);
+	glCopyTextureSubImage2D(prevGrid.texture, 0, 0, 0, 0, 0, width, height);
+	std::swap(prevGrid, pingpongGrid);
 }
 
-Texture* IWaveSurfaceGPU::get_display() {
-	return &grids[currentGrid];
+Texture IWaveSurfaceGPU::get_display() {
+	return {
+		.id = currentGrid.texture,
+		.width = width,
+		.height = height,
+		.mipmaps = 0,
+		.format = PIXELFORMAT_UNCOMPRESSED_R32
+	};
 }

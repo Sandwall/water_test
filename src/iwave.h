@@ -41,7 +41,7 @@ public:
 	void set_obstruction(int x, int y, int rx, int ry, float strength) override;
 	void sim_frame(float delta) override;
 
-	Texture* get_display() override;
+	Texture get_display() override;
 
 	void reset() override;
 };

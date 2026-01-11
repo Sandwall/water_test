@@ -97,6 +97,7 @@
     <ClInclude Include="src\iwave.h" />
     <ClInclude Include="src\iwave_gpu.h" />
     <ClInclude Include="src\surface_sim.h" />
+    <ClInclude Include="src\texture_target.h" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="raylib\projects\VS2022\raylib\raylib.vcxproj">

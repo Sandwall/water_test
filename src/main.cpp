@@ -31,7 +31,7 @@ int main(int argc, char** argv) {
 	ClearWindowState(FLAG_WINDOW_RESIZABLE);
 	SetTargetFPS(60);
 
-	IWaveSurface surface(simWidth, simHeight, 4);
+	IWaveSurfaceGPU surface(simWidth, simHeight, 4);
 
 	// main loop
 	mousePos = GetMousePosition();
@@ -65,15 +65,13 @@ int main(int argc, char** argv) {
 		BeginDrawing();
 		ClearBackground(MAGENTA);
 
-		Texture* displayTex = surface.get_display();
-		if (displayTex) {
-			DrawTexturePro(*displayTex,
-				Rectangle{ 0, 0, simWidth, simHeight },
-				Rectangle{ 0, 0, screenWidth, screenHeight },
-				Vector2(0, 0), 0.0f,
-				WHITE
-			);
-		}
+
+		//DrawTexturePro(surface.get_display(),
+		//	Rectangle{ 0, 0, simWidth, simHeight },
+		//	Rectangle{ 0, 0, screenWidth, screenHeight },
+		//	Vector2(0, 0), 0.0f,
+		//	WHITE
+		//);
 
 		char fpsString[32] = { 0 };
 		snprintf(fpsString, 31, "%f ms", frameTime * 1000.0f);
