@@ -3,6 +3,7 @@
 #include <raylib.h>
 #include <rlgl.h>
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
 
@@ -23,6 +24,7 @@ struct TextureTarget {
 		// the one texture in this struct will be the only color attachment, and we have no need for depth/stencil buffer
 		// in addition, we're going to attach the texture as a texture2D because other shaders will be sampling them
 		rlFramebufferAttach(result.framebuffer, result.texture, RL_ATTACHMENT_COLOR_CHANNEL0, RL_ATTACHMENT_TEXTURE2D, 0);
+		rlFramebufferComplete(result.framebuffer);
 
 		return result;
 	}
@@ -68,10 +70,10 @@ struct TextureTarget {
 
 		if (!data) {
 			void* initialData = calloc(1, w * h * byte_size(format));
-			tex = rlLoadTexture(initialData, w, h, format, 0);
+			tex = rlLoadTexture(initialData, w, h, format, 1);
 			free(initialData);
 		} else
-			tex = rlLoadTexture(data, w, h, format, 0);
+			tex = rlLoadTexture(data, w, h, format, 1);
 
 		return tex;
 	}

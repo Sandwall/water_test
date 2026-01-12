@@ -10,15 +10,30 @@
 class IWaveSurfaceGPU : public SurfaceSim {
 	int width = 0, height = 0;
 
+	void copy_tex(TextureTarget from, TextureTarget to);
+
 	// there are more than 2 grids for pingpong rendering
 	TextureTarget currentGrid, prevGrid, pingpongGrid;
 	TextureTarget verticalDerivative;
-	TextureTarget sourceObstruct; // 4-channel float texture for auxilliary data
-	                              // r = source, g = obstruction
 
+	// 4-channel float texture for auxiliary data
+	// r = source, g = obstruction
+	TextureTarget sourceObstruct, pingpongSO; 
+
+	Shader copyShader;
+	// for mutating auxiliary data (sourceObstruct)
+	Shader drawAuxShader;
+	Shader progressSoShader;
+
+	// progresses the simulation
 	Shader preprocessShader;
 	Shader convolutionShader;
 	Shader propagateShader;
+
+	int c_inputTexture;
+
+	int n1_sourceObstruct, n1_mvp, n1_maxValue;
+	int n2_sourceObstruct, n2_speed;
 
 	int p1_currentGrid, p1_sourceObstruct;
 	int p2_currentGrid, p2_kernel, p2_gridCellSize, p2_kernelRadius;
@@ -28,6 +43,8 @@ class IWaveSurfaceGPU : public SurfaceSim {
 	unsigned int kernelTexture;
 	unsigned int compute_kernel(int radius);
 
+	unsigned int quadVao, quadVbo;
+	void draw_quad();
 public:
 	float velocityDamping;
 	float accelerationTerm;
@@ -36,7 +53,7 @@ public:
 	~IWaveSurfaceGPU();
 
 	void place_source(int x, int y, float r, float strength) override;
-	void set_obstruction(int x, int y, int rx, int ry, float strength) override;
+	void set_obstruction(int x, int y, float r, float strength) override;
 	void sim_frame(float delta) override;
 	void reset() override;
 	Texture get_display() override;

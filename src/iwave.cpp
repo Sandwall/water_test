@@ -139,9 +139,11 @@ void IWaveSurface::place_source(int x, int y, float r, float strength) {
 }
 
 // sets new values based on the minimum
-void IWaveSurface::set_obstruction(int x, int y, int rx, int ry, float strength) {
-	for (int iy = -2; iy <= 2; iy++) {
-		for (int ix = -2; ix <= 2; ix++) {
+void IWaveSurface::set_obstruction(int x, int y, float r, float strength) {
+	int extent = static_cast<int>(fabsf(r + 0.5f));
+
+	for (int iy = -extent; iy <= extent; iy++) {
+		for (int ix = -extent; ix <= extent; ix++) {
 			int idx = get_idx(x + ix, y + iy);
 			if (idx < 0) return;
 

@@ -9,7 +9,7 @@ public:
 	virtual void place_source(int x, int y, float r, float strength) = 0;
 
 	// places obstruction square at (x, y), with width 2rx+1 and height 2ry+1
-	virtual void set_obstruction(int x, int y, int rx, int ry, float strength) = 0;
+	virtual void set_obstruction(int x, int y, float r, float strength) = 0;
 
 	// simulate a frame
 	virtual void sim_frame(float delta) = 0;

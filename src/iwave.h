@@ -38,7 +38,7 @@ public:
 	~IWaveSurface();
 
 	void place_source(int x, int y, float r, float strength) override;
-	void set_obstruction(int x, int y, int rx, int ry, float strength) override;
+	void set_obstruction(int x, int y, float r, float strength) override;
 	void sim_frame(float delta) override;
 
 	Texture get_display() override;
