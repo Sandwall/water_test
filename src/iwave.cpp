@@ -4,6 +4,8 @@
 #include <math.h>
 #include <algorithm>
 
+#include <GL/gl3w.h>
+
 // NOTE: i'm lazy lol
 #define DOALLOC static_cast<float*>(malloc(bufferSize))
 #define DOFREE(x) free(x); x = nullptr;
@@ -43,10 +45,13 @@ IWaveSurface::IWaveSurface(int w, int h, int p) {
 
 	// allocate display texture
 	waterPixels = (uint32_t*)malloc(sizeof(uint32_t) * width * height);
-	Image waterImage = GenImageColor(width, height, BLACK);
-	ImageFormat(&waterImage, PIXELFORMAT_UNCOMPRESSED_R8G8B8A8);
-	waterTexture = LoadTextureFromImage(waterImage);
-	UnloadImage(waterImage);
+
+	glGenTextures(1, &waterTexture);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glBindTexture(GL_TEXTURE_2D, waterTexture);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, waterPixels);
+
 
 	// CFL condition says that https://en.wikipedia.org/wiki/Courant%E2%80%93Friedrichs%E2%80%93Lewy_condition 
 	// accelerationTerm <= (0.5/delta)^2 and velocityDamping <= 2/delta
@@ -113,7 +118,6 @@ IWaveSurface::IWaveSurface(int w, int h, int p) {
 }
 
 IWaveSurface::~IWaveSurface() {
-	UnloadTexture(waterTexture);
 	DOFREE(currentGrid);
 	DOFREE(prevGrid);
 	DOFREE(verticalDerivative);
@@ -251,7 +255,7 @@ void IWaveSurface::sim_frame(float delta) {
 	}
 }
 
-Texture IWaveSurface::get_display() {
+GLuint IWaveSurface::get_display() {
 	if (!waterPixels) return { 0 };
 
 	// update water texture
@@ -260,24 +264,22 @@ Texture IWaveSurface::get_display() {
 		for (int y = 0; y < height; y++) {
 			for (int x = 0; x < width; x++) {
 				uint8_t* pixel = reinterpret_cast<uint8_t*>(&waterPixels[x + (y * width)]);
-				uint8_t& red = pixel[0];
-				uint8_t& green = pixel[1];
-				uint8_t& blue = pixel[2];
-				uint8_t& alpha = pixel[3];
+				float h = std::clamp(get_height(x, y), -extents, extents);
 
-				green = 0;
-				alpha = 255;
-
-				float surfaceValue = std::clamp(get_height(x, y), -extents, extents);
 				// the entire screen will be half blue when each surface value is at 0.0f
-				blue = pix_from_normalized((surfaceValue + extents) / (extents * 2.0f));
-
-				red = pix_from_normalized(1.0f - get_obstruction(x, y));
+				pixel[0] = pix_from_normalized(1.0f - get_obstruction(x, y));
+				pixel[1] = 0;
+				pixel[2] = pix_from_normalized((h + extents) / (extents * 2.0f));
+				pixel[3] = 255;
 			}
 		}
 	}
 
-	UpdateTexture(waterTexture, waterPixels);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glBindTexture(GL_TEXTURE_2D, waterTexture);
+	//glTextureSubImage2D(waterTexture, 0, 0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, waterPixels);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, waterPixels);
 
 	// texture struct is 20 bytes, surely it it isn't too much to just return it directly
 	return waterTexture;

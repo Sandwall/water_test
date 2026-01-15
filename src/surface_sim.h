@@ -1,7 +1,7 @@
 #pragma once
 
+#include <GL/glcorearb.h> // for GL types
 #include <stdint.h>
-#include <raylib.h>
 
 class SurfaceSim {
 public:
@@ -18,7 +18,7 @@ public:
 	virtual void reset() = 0;
 
 	// uses internal variables to get a texture that can be presented to the screen
-	virtual Texture get_display() = 0;
+	virtual GLuint get_display() = 0;
 };
 
 // helper function for displaying

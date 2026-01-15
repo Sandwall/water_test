@@ -5,6 +5,10 @@ build/
 bin/
 obj/
 
+include/GLFW
+
+*raddbg*
+
 *.user
 *.dll
 *.exe

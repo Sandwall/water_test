@@ -1,7 +1,6 @@
 #pragma once
 
 #include "surface_sim.h"
-#include <raylib.h>
 
 // https://people.computing.clemson.edu/~jtessen/reports/papers_files/Interactive_Water_Surfaces.pdf
 class IWaveSurface : public SurfaceSim {
@@ -23,7 +22,7 @@ class IWaveSurface : public SurfaceSim {
 
 	// for display
 	uint32_t* waterPixels = nullptr;
-	Texture waterTexture;
+	unsigned int waterTexture;
 
 	int get_idx(int x, int y) const;
 	int get_kernel_reflected_idx(int x, int y) const;
@@ -41,7 +40,7 @@ public:
 	void set_obstruction(int x, int y, float r, float strength) override;
 	void sim_frame(float delta) override;
 
-	Texture get_display() override;
+	GLuint get_display() override;
 
 	void reset() override;
 };

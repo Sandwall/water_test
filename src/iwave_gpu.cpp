@@ -4,74 +4,17 @@
 #include <math.h>
 #include <algorithm>
 
-#include <rlgl.h>
-
 // NOTE: i'm lazy lol
 #define DOALLOC static_cast<float*>(malloc(bufferSize))
 #define DOFREE(x) free(x); x = nullptr;
 #define SETZERO(x) memset(x, 0, bufferSize)
 
-static Matrix matrixIdentity(void)
-{
-	Matrix result = {
-		1.0f, 0.0f, 0.0f, 0.0f,
-		0.0f, 1.0f, 0.0f, 0.0f,
-		0.0f, 0.0f, 1.0f, 0.0f,
-		0.0f, 0.0f, 0.0f, 1.0f
-	};
-
-	return result;
-}
-
-// used for transformed draws
-const char* transformedVertexSource = /* vertex shader */ R"(
-#version 430
-in vec3 vertexPosition;
-in vec2 vertexTexCoord;
-
-out vec2 fragTexCoord;
-out vec2 screenUv;
-
-uniform mat4 mvp;
-
-void main() {
-	fragTexCoord = vertexTexCoord;
-	gl_Position = mvp * vec4(vertexPosition, 1.0);
-	screenUv = (gl_Position.xy + 1.0) / 2.0;
-}
-)";
-
-// used for fullscreen draws
-const char* fullscreenVertexSource = /* vertex shader */ R"(
-#version 430
-in vec3 vertexPosition;
-in vec2 vertexTexCoord;
-out vec2 fragTexCoord;
-
-void main() {
-	fragTexCoord = vertexTexCoord;
-	gl_Position = vec4(vertexPosition, 1.0);
-}
-)";
-
-// used to copy a texture to another
-const char* copyFragSource = /* fragment shader */ R"(
-#version 430
-in vec2 fragTexCoord;
-out vec4 outColor;
-
-uniform sampler2D inputTexture;
-
-void main() {
-	outColor = texture(inputTexture, fragTexCoord);
-}
-)";
-
 // meant for drawing circle and rectangle shapes to the sourceObstruct textures
 const char* drawAuxFragSource = /* fragment shader */ R"(
 #version 430
-in vec2 fragTexCoord;
+in vec2 fragUv;
 in vec2 screenUv;
+
 out vec4 outColor;
 
 uniform sampler2D sourceObstruct;
@@ -79,7 +22,7 @@ uniform vec2 maxValue;
 
 void main() {
 	outColor = texture(sourceObstruct, screenUv);
-	float dist = max(0.0, 1.0 - length((fragTexCoord - 0.5) * 2.0));
+	float dist = max(0.0, 1.0 - length((fragUv - 0.5) * 2.0));
 
 	// replace sources
 	if(maxValue.x < 0.0) {
@@ -104,7 +47,9 @@ void main() {
 // progresses the source obstruct texture (fades sources towards zero and leaves obstructions unchanged)
 const char* progressSoFragSource = /* fragment shader */ R"(
 #version 430
-in vec2 fragTexCoord;
+in vec2 fragUv;
+in vec2 screenUv;
+
 out vec4 nextValue;
 
 uniform sampler2D sourceObstruct;
@@ -120,7 +65,7 @@ float to_zero(float x, float s) {
 }
 
 void main() {
-	nextValue = texture(sourceObstruct, fragTexCoord);
+	nextValue = texture(sourceObstruct, fragUv);
 	nextValue.r = to_zero(nextValue.r, speed);
 }
 )";
@@ -128,15 +73,17 @@ void main() {
 
 const char* preprocessFragSource = /* fragment shader */ R"(
 #version 430
-in vec2 fragTexCoord;
+in vec2 fragUv;
+in vec2 screenUv;
+
 out vec4 nextValue;
 
 uniform sampler2D currentGrid;
 uniform sampler2D sourceObstruct;
 
 void main() {
-	float currentValue = texture(currentGrid, fragTexCoord).r;
-	vec2 soValue = texture(sourceObstruct, fragTexCoord).xy;
+	float currentValue = texture(currentGrid, fragUv).r;
+	vec2 soValue = texture(sourceObstruct, fragUv).xy;
 
 	currentValue += soValue.x;
 	currentValue *= soValue.y;
@@ -148,7 +95,9 @@ void main() {
 
 const char* convolutionFragSource = /* fragment shader */ R"(
 #version 430
-in vec2 fragTexCoord;
+in vec2 fragUv;
+in vec2 screenUv;
+
 out vec4 nextValue;
 
 uniform sampler2D currentGrid;
@@ -183,7 +132,7 @@ void main() {
 			vec2 offsetUv = vec2(kernelRadius, kernelRadius) * gridCellSize;
 			float kernelValue = texture(kernel, offsetUv + 0.5).r;
 
-			offsetUv = reflect_uv(fragTexCoord + offsetUv);
+			offsetUv = reflect_uv(fragUv + offsetUv);
 			sum += kernelValue + texture(currentGrid, offsetUv).r;
 		}
 	}
@@ -195,7 +144,9 @@ void main() {
 
 const char* propagateFragSource = /* fragment shader */ R"(
 #version 430
-in vec2 fragTexCoord;
+in vec2 fragUv;
+in vec2 screenUv;
+
 out vec4 nextValue;
 
 uniform sampler2D currentGrid;
@@ -204,9 +155,9 @@ uniform sampler2D verticalDerivative;
 uniform vec3 coefficients; // these are computed once on the CPU each frame
 
 void main() {
-	float currentValue = texture(currentGrid, fragTexCoord).r;
-	float prevValue = texture(prevGrid, fragTexCoord).r;
-	float derivativeValue = texture(verticalDerivative, fragTexCoord).r;
+	float currentValue = texture(currentGrid, fragUv).r;
+	float prevValue = texture(prevGrid, fragUv).r;
+	float derivativeValue = texture(verticalDerivative, fragUv).r;
 
 	nextValue.x = currentValue * coefficients.x
 		+ prevValue * coefficients.y
@@ -230,28 +181,6 @@ IWaveSurfaceGPU::IWaveSurfaceGPU(int w, int h, int p) {
 	// allocate and compute derivative kernel
 	kernelRadius = p;
 	kernelTexture = compute_kernel(p);
-
-	// create gpu resources
-	float vertices[] = {
-		// First triangle
-		-1.0f,  1.0f, 0.0f,   0.0f, 1.0f,  // Top-left
-		-1.0f, -1.0f, 0.0f,   0.0f, 0.0f,  // Bottom-left
-		 1.0f, -1.0f, 0.0f,   1.0f, 0.0f,  // Bottom-right
-
-		 // Second triangle
-		 -1.0f,  1.0f, 0.0f,   0.0f, 1.0f,  // Top-left
-		  1.0f, -1.0f, 0.0f,   1.0f, 0.0f,  // Bottom-right
-		  1.0f,  1.0f, 0.0f,   1.0f, 1.0f,  // Top-right
-	};
-
-	quadVao = rlLoadVertexArray();
-	rlEnableVertexArray(quadVao);
-	quadVbo = rlLoadVertexBuffer(vertices, sizeof(vertices), false);
-	rlEnableVertexAttribute(0);
-	rlSetVertexAttribute(0, 3, RL_FLOAT, false, sizeof(float) * 5, 0);
-	rlEnableVertexAttribute(1);
-	rlSetVertexAttribute(1, 2, RL_FLOAT, false, sizeof(float) * 5, sizeof(float) * 3);
-	rlDisableVertexArray();
 
 	currentGrid = TextureTarget::create(width, height);
 	prevGrid = TextureTarget::create(width, height);
@@ -346,13 +275,6 @@ unsigned int IWaveSurfaceGPU::compute_kernel(int radius) {
 IWaveSurfaceGPU::~IWaveSurfaceGPU() {
 }
 
-// rlLoadDrawQuad was too dumb so I'm trying this
-void IWaveSurfaceGPU::draw_quad() {
-	rlEnableVertexArray(quadVao);
-	rlDrawVertexArray(0, 6);
-	rlDisableVertexArray();
-}
-
 // this might be a bit expensive since it copies a super large texture for each call
 // but we can disregard the performance of it since in a game scenario we would just build the texture from scratch each frame
 void IWaveSurfaceGPU::place_source(int x, int y, float r, float strength) {
@@ -424,29 +346,6 @@ void IWaveSurfaceGPU::reset() {
 	rlEnableFramebuffer(pingpongSO.framebuffer);
 	rlClearScreenBuffers();
 
-	rlDisableFramebuffer();
-}
-
-void IWaveSurfaceGPU::copy_tex(TextureTarget from, TextureTarget to) {
-	rlEnableFramebuffer(to.framebuffer);
-	rlEnableShader(copyShader.id);
-	
-	rlDisableDepthTest();
-	//rlDisableColorBlend();
-	rlDisableBackfaceCulling();
-
-	rlActiveTextureSlot(0);
-	rlEnableTexture(from.texture);
-	rlSetUniformSampler(c_inputTexture, from.texture);
-	draw_quad();
-
-	rlDisableTexture();
-	
-	rlEnableBackfaceCulling();
-	//rlEnableColorBlend();
-	rlEnableDepthTest();
-
-	rlDisableShader();
 	rlDisableFramebuffer();
 }
 

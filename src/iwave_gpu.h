@@ -4,13 +4,10 @@
 
 #include "surface_sim.h"
 #include "texture_target.h"
-#include <raylib.h>
 
 // https://people.computing.clemson.edu/~jtessen/reports/papers_files/Interactive_Water_Surfaces.pdf
 class IWaveSurfaceGPU : public SurfaceSim {
 	int width = 0, height = 0;
-
-	void copy_tex(TextureTarget from, TextureTarget to);
 
 	// there are more than 2 grids for pingpong rendering
 	TextureTarget currentGrid, prevGrid, pingpongGrid;
@@ -43,8 +40,6 @@ class IWaveSurfaceGPU : public SurfaceSim {
 	unsigned int kernelTexture;
 	unsigned int compute_kernel(int radius);
 
-	unsigned int quadVao, quadVbo;
-	void draw_quad();
 public:
 	float velocityDamping;
 	float accelerationTerm;
@@ -56,5 +51,5 @@ public:
 	void set_obstruction(int x, int y, float r, float strength) override;
 	void sim_frame(float delta) override;
 	void reset() override;
-	Texture get_display() override;
+	unsigned int get_display() override;
 };
