@@ -178,7 +178,7 @@ void Renderer::get_format_info(int internalFormat, int& dataFormat, int& dataTyp
 
 // used for both fullscreen draws and transformed draws (transformation is happening CPU-side)
 const char* Renderer::vertexSource = /* vertex shader */ R"(
-#version 460
+#version 460 core
 
 in vec2 vertexPosition;
 in vec2 vertexTexCoord;
@@ -198,7 +198,7 @@ void main() {
 
 // used to copy a texture to another
 const char* sampleTextureFragSource = /* fragment shader */ R"(
-#version 460
+#version 460 core
 
 in vec2 fragUv;
 in vec2 screenUv;
@@ -297,6 +297,7 @@ GLuint Renderer::create_tex(int w, int h, int format, const void* data) {
 	return tex;
 }
 
+static char compilationLog[1024];
 GLuint Renderer::compile_shader(const char* vs, const char* fs) {
 	GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
 	GLuint fragShader = glCreateShader(GL_FRAGMENT_SHADER);
@@ -308,12 +309,31 @@ GLuint Renderer::compile_shader(const char* vs, const char* fs) {
 	glShaderSource(fragShader, 1, &fs, &fragLen);
 
 	glCompileShader(vertexShader);
+
+	GLint success;
+	glGetShaderiv(vertexShader, GL_COMPILE_STATUS, &success);
+	if (GL_TRUE != success) {
+		glGetShaderInfoLog(vertexShader, 1024, nullptr, compilationLog);
+		fprintf(stderr, "ERROR: Shader compilation failed!\n\t%s\n", compilationLog);
+	}
+
 	glCompileShader(fragShader);
+	glGetShaderiv(fragShader, GL_COMPILE_STATUS, &success);
+	if (GL_TRUE != success) {
+		glGetShaderInfoLog(fragShader, 1024, nullptr, compilationLog);
+		fprintf(stderr, "ERROR: Shader compilation failed!\n\t%s\n", compilationLog);
+	}
 
 	GLuint program = glCreateProgram();
 	glAttachShader(program, vertexShader);
 	glAttachShader(program, fragShader);
 	glLinkProgram(program);
+
+	glGetProgramiv(program, GL_LINK_STATUS, &success);
+	if (GL_TRUE != success) {
+		glGetProgramInfoLog(program, 1024, nullptr, compilationLog);
+		fprintf(stderr, "ERROR: Shader linking failed!\n\t%s\n", compilationLog);
+	}
 
 	glDeleteShader(vertexShader);
 	glDeleteShader(fragShader);

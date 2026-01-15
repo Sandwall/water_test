@@ -14,7 +14,8 @@
 
 // meant for drawing circle and rectangle shapes to the sourceObstruct textures
 const char* drawAuxFragSource = /* fragment shader */ R"(
-#version 460
+#version 460 core
+
 in vec2 fragUv;
 in vec2 screenUv;
 
@@ -35,7 +36,6 @@ void main() {
 		outColor.x = clamp(outColor.x, -maxValue.x, maxValue.x);
 	}
 
-
 	// replace obstructions
 	//if(maxValue.y < 0.0) {
 	//	outColor.y = 1.0 - maxValue.y;
@@ -49,7 +49,8 @@ void main() {
 
 // progresses the source obstruct texture (fades sources towards zero and leaves obstructions unchanged)
 const char* progressSoFragSource = /* fragment shader */ R"(
-#version 460
+#version 460 core
+
 in vec2 fragUv;
 in vec2 screenUv;
 
@@ -75,7 +76,8 @@ void main() {
 
 
 const char* preprocessFragSource = /* fragment shader */ R"(
-#version 460
+#version 460 core
+
 in vec2 fragUv;
 in vec2 screenUv;
 
@@ -97,7 +99,8 @@ void main() {
 )";
 
 const char* convolutionFragSource = /* fragment shader */ R"(
-#version 460
+#version 460 core
+
 in vec2 fragUv;
 in vec2 screenUv;
 
@@ -146,7 +149,8 @@ void main() {
 )";
 
 const char* propagateFragSource = /* fragment shader */ R"(
-#version 460
+#version 460 core
+
 in vec2 fragUv;
 in vec2 screenUv;
 
@@ -166,7 +170,6 @@ void main() {
 		+ prevValue * coefficients.y
 		+ derivativeValue * coefficients.z;
 }
-
 )";
 
 IWaveSurfaceGPU::IWaveSurfaceGPU(int w, int h, int p) {
@@ -292,7 +295,6 @@ void IWaveSurfaceGPU::place_source(int x, int y, float r, float strength) {
 	Renderer::uniform_tex(drawAuxShader, 0, n1_sourceObstruct);
 	glUniform2f(n1_maxValue, strength, 0.0f);
 
-	Renderer::sampler_settings();
 	Renderer::draw_transformed_quad(static_cast<float>(x), static_cast<float>(y), r, r);
 	Renderer::bind_tex(0, 0);
 
