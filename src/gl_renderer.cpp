@@ -5,12 +5,12 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-void TextureTarget::init(int w, int h, int format = GL_R32F_EXT) {
+void TextureTarget::init(int w, int h, int format) {
 	clean();
 
 	width = w;
 	height = h;
-	texture = Renderer::create_only_tex(w, h, format);
+	texture = Renderer::create_tex(w, h, format);
 
 	glCreateFramebuffers(1, &framebuffer);
 	glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
@@ -41,6 +41,10 @@ void TextureTarget::init(int w, int h, int format = GL_R32F_EXT) {
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
+void TextureTarget::set_target() {
+	glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+}
+
 void TextureTarget::clean() {
 	glDeleteFramebuffers(1, &framebuffer);
 	glDeleteTextures(1, &texture);
@@ -57,41 +61,125 @@ void TextureTarget::copy_from(const TextureTarget& from) {
 	glBindFramebuffer(GL_READ_BUFFER, 0);
 }
 
+
 // we probably won't use all of these texture formats, but the initialization for them are here if we ever do
-static int byte_size(int format) {
+int Renderer::byte_size(int format, int type) {
+	int size = 0;
+
 	switch (format) {
-	case GL_R32F:
-		return sizeof(float);
-	case GL_RG32F:
-		return 2 * sizeof(float);
-	case GL_RGB32F:
-		return 3 * sizeof(float);
-	case GL_RGBA32F:
-		return 4 * sizeof(float);
+	case GL_RED:
 	case GL_R8:
-		return sizeof(uint8_t);
-	case GL_RG8:
-		return 2 * sizeof(uint8_t);
-	case GL_RGB8:
-		return 3 * sizeof(uint8_t);
-	case GL_RGBA8:
-		return 4 * sizeof(uint8_t);
+	case GL_R16:
 	case GL_R16F:
-		return sizeof(uint16_t);
+	case GL_R32F:
+		size = 1;
+		break;
+	case GL_RG:
+	case GL_RG8:
+	case GL_RG16:
 	case GL_RG16F:
-		return 2 * sizeof(uint16_t);
+	case GL_RG32F:
+		size = 2;
+		break;
+	case GL_RGB:
+	case GL_RGB8:
+	case GL_RGB16:
 	case GL_RGB16F:
-		return 3 * sizeof(uint16_t);
+	case GL_RGB32F:
+		size = 3;
+		break;
+	case GL_RGBA:
+	case GL_RGBA8:
+	case GL_RGBA16:
 	case GL_RGBA16F:
-		return 4 * sizeof(uint16_t);
-	default:
-		return 0;
+	case GL_RGBA32F:
+		size = 4;
+		break;
+	}
+
+	switch (type) {
+	case GL_UNSIGNED_BYTE:
+	case GL_BYTE:
+		size *= 1;
+		break;
+	case GL_UNSIGNED_SHORT:
+	case GL_HALF_FLOAT:
+	case GL_SHORT:
+		size *= 2;
+		break;
+	case GL_INT:
+	case GL_UNSIGNED_INT:
+	case GL_FLOAT:
+		size *= 4;
+		break;
+	}
+
+	return size;
+}
+
+// like the above function, this function probably does not cover every OpenGL sized texture format
+void Renderer::get_format_info(int internalFormat, int& dataFormat, int& dataType) {
+	if (!dataFormat || !dataType) return;
+	
+	switch (internalFormat) {
+	case GL_R8:
+	case GL_R16:
+	case GL_R16F:
+	case GL_R32F:
+		dataFormat = GL_RED;
+		break;
+	case GL_RG8:
+	case GL_RG16:
+	case GL_RG16F:
+	case GL_RG32F:
+		dataFormat = GL_RG;
+		break;
+	case GL_RGB8:
+	case GL_RGB16:
+	case GL_RGB16F:
+	case GL_RGB32F:
+		dataFormat = GL_RGB;
+		break;
+	case GL_RGBA8:
+	case GL_RGBA16:
+	case GL_RGBA16F:
+	case GL_RGBA32F:
+		dataFormat = GL_RGBA;
+		break;
+	}
+
+	switch (internalFormat) {
+	case GL_R8:
+	case GL_RG8:
+	case GL_RGB8:
+	case GL_RGBA8:
+		dataType = GL_UNSIGNED_BYTE;
+		break;
+	case GL_R16:
+	case GL_RG16:
+	case GL_RGB16:
+	case GL_RGBA16:
+		dataType = GL_UNSIGNED_SHORT;
+		break;
+	case GL_R16F:
+	case GL_RG16F:
+	case GL_RGB16F:
+	case GL_RGBA16F:
+		dataType = GL_HALF_FLOAT;
+		break;
+	case GL_R32F:
+	case GL_RG32F:
+	case GL_RGB32F:
+	case GL_RGBA32F:
+		dataType = GL_FLOAT;
+		break;
 	}
 }
 
 // used for both fullscreen draws and transformed draws (transformation is happening CPU-side)
-const char* vertexSource = /* vertex shader */ R"(
-#version 430
+const char* Renderer::vertexSource = /* vertex shader */ R"(
+#version 460
+
 in vec2 vertexPosition;
 in vec2 vertexTexCoord;
 
@@ -110,7 +198,8 @@ void main() {
 
 // used to copy a texture to another
 const char* sampleTextureFragSource = /* fragment shader */ R"(
-#version 430
+#version 460
+
 in vec2 fragUv;
 in vec2 screenUv;
 
@@ -170,10 +259,17 @@ void Renderer::init() {
 }
 
 void Renderer::cleanup() {
-
+	// TODO... I'm not really concerned about end-of-program cleanup right now
 }
 
-GLuint Renderer::create_only_tex(int w, int h, int format, int type, const void* data) {
+void Renderer::sampler_settings() {
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+}
+
+GLuint Renderer::create_tex(int w, int h, int format, const void* data) {
 	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 
 	glActiveTexture(GL_TEXTURE0);
@@ -182,18 +278,18 @@ GLuint Renderer::create_only_tex(int w, int h, int format, int type, const void*
 	GLuint tex = 0;
 	glGenTextures(1, &tex);
 
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-
 	glBindTexture(GL_TEXTURE_2D, tex);
+	sampler_settings();
+
+	int dataFormat, dataType;
+	get_format_info(format, dataFormat, dataType);
 
 	if (!data) {
-		void* initialData = calloc(1, w * h * byte_size(format));
-		glTexImage2D(GL_TEXTURE_2D, 0, format, w, h, 0, format, type, initialData);
+		void* initialData = calloc(1, w * h * byte_size(dataFormat, dataType));
+		glTexImage2D(GL_TEXTURE_2D, 0, format, w, h, 0, dataFormat, dataType, initialData);
 		free(initialData);
-	}
-	else {
-		glTexImage2D(GL_TEXTURE_2D, 0, format, w, h, 0, format, type, data);
+	} else {
+		glTexImage2D(GL_TEXTURE_2D, 0, format, w, h, 0, dataFormat, dataType, data);
 	}
 
 	glBindTexture(GL_TEXTURE_2D, 0);
@@ -233,10 +329,13 @@ void Renderer::bind_tex(GLuint textureSlot, GLuint texture) {
 	glBindTexture(GL_TEXTURE_2D, texture);
 }
 
-void Renderer::uniform_tex(GLuint shader, GLuint texture, const char* location) {
-	GLuint loc = glGetUniformLocation(shader, location);
+GLuint Renderer::shader_loc(GLuint shader, const char* location) {
+	return glGetUniformLocation(shader, location);
+}
+
+void Renderer::uniform_tex(GLuint shader, GLuint texture, GLuint location) {
 	glUseProgram(shader);
-	glUniform1i(loc, texture);
+	glUniform1i(location, texture);
 }
 
 void Renderer::draw_quad() {

@@ -3,7 +3,9 @@
 #pragma once
 
 #include "surface_sim.h"
-#include "texture_target.h"
+#include "gl_renderer.h"
+
+#define IWAVESURFACE_GPU
 
 // https://people.computing.clemson.edu/~jtessen/reports/papers_files/Interactive_Water_Surfaces.pdf
 class IWaveSurfaceGPU : public SurfaceSim {
@@ -17,24 +19,21 @@ class IWaveSurfaceGPU : public SurfaceSim {
 	// r = source, g = obstruction
 	TextureTarget sourceObstruct, pingpongSO; 
 
-	Shader copyShader;
 	// for mutating auxiliary data (sourceObstruct)
-	Shader drawAuxShader;
-	Shader progressSoShader;
+	GLuint drawAuxShader;
+	GLuint progressSoShader;
 
 	// progresses the simulation
-	Shader preprocessShader;
-	Shader convolutionShader;
-	Shader propagateShader;
+	GLuint preprocessShader;
+	GLuint convolutionShader;
+	GLuint propagateShader;
 
-	int c_inputTexture;
+	GLuint n1_sourceObstruct, n1_mvp, n1_maxValue;
+	GLuint n2_sourceObstruct, n2_speed;
 
-	int n1_sourceObstruct, n1_mvp, n1_maxValue;
-	int n2_sourceObstruct, n2_speed;
-
-	int p1_currentGrid, p1_sourceObstruct;
-	int p2_currentGrid, p2_kernel, p2_gridCellSize, p2_kernelRadius;
-	int p3_currentGrid, p3_prevGrid, p3_verticalDerivative, p3_coefficients;
+	GLuint p1_currentGrid, p1_sourceObstruct;
+	GLuint p2_currentGrid, p2_kernel, p2_gridCellSize, p2_kernelRadius;
+	GLuint p3_currentGrid, p3_prevGrid, p3_verticalDerivative, p3_coefficients;
 	
 	int kernelRadius = 0;
 	unsigned int kernelTexture;
@@ -51,5 +50,7 @@ public:
 	void set_obstruction(int x, int y, float r, float strength) override;
 	void sim_frame(float delta) override;
 	void reset() override;
-	unsigned int get_display() override;
+	GLuint get_display() override;
+
+	void imgui_builder();
 };

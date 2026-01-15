@@ -5,6 +5,7 @@
 #include <algorithm>
 
 #include <GL/gl3w.h>
+#include "gl_renderer.h"
 
 // NOTE: i'm lazy lol
 #define DOALLOC static_cast<float*>(malloc(bufferSize))
@@ -47,8 +48,8 @@ IWaveSurface::IWaveSurface(int w, int h, int p) {
 	waterPixels = (uint32_t*)malloc(sizeof(uint32_t) * width * height);
 
 	glGenTextures(1, &waterTexture);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	Renderer::sampler_settings();
+	Renderer::bind_tex(0, waterTexture);
 	glBindTexture(GL_TEXTURE_2D, waterTexture);
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, waterPixels);
 

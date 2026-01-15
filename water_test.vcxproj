@@ -100,6 +100,7 @@
     <ClCompile Include="src\external\imgui_widgets.cpp" />
     <ClCompile Include="src\gl_renderer.cpp" />
     <ClCompile Include="src\iwave.cpp" />
+    <ClCompile Include="src\iwave_gpu.cpp" />
     <ClCompile Include="src\main.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -115,6 +116,7 @@
     <ClInclude Include="src\external\imstb_truetype.h" />
     <ClInclude Include="src\gl_renderer.h" />
     <ClInclude Include="src\iwave.h" />
+    <ClInclude Include="src\iwave_gpu.h" />
     <ClInclude Include="src\surface_sim.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

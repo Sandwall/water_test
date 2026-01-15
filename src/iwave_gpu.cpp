@@ -1,5 +1,8 @@
 #include "iwave_gpu.h"
 
+#include <GL/gl3w.h>
+#include "external/imgui.h"
+
 #include <stdlib.h> // for calloc/free
 #include <math.h>
 #include <algorithm>
@@ -11,7 +14,7 @@
 
 // meant for drawing circle and rectangle shapes to the sourceObstruct textures
 const char* drawAuxFragSource = /* fragment shader */ R"(
-#version 430
+#version 460
 in vec2 fragUv;
 in vec2 screenUv;
 
@@ -46,7 +49,7 @@ void main() {
 
 // progresses the source obstruct texture (fades sources towards zero and leaves obstructions unchanged)
 const char* progressSoFragSource = /* fragment shader */ R"(
-#version 430
+#version 460
 in vec2 fragUv;
 in vec2 screenUv;
 
@@ -72,7 +75,7 @@ void main() {
 
 
 const char* preprocessFragSource = /* fragment shader */ R"(
-#version 430
+#version 460
 in vec2 fragUv;
 in vec2 screenUv;
 
@@ -94,7 +97,7 @@ void main() {
 )";
 
 const char* convolutionFragSource = /* fragment shader */ R"(
-#version 430
+#version 460
 in vec2 fragUv;
 in vec2 screenUv;
 
@@ -143,7 +146,7 @@ void main() {
 )";
 
 const char* propagateFragSource = /* fragment shader */ R"(
-#version 430
+#version 460
 in vec2 fragUv;
 in vec2 screenUv;
 
@@ -182,40 +185,38 @@ IWaveSurfaceGPU::IWaveSurfaceGPU(int w, int h, int p) {
 	kernelRadius = p;
 	kernelTexture = compute_kernel(p);
 
-	currentGrid = TextureTarget::create(width, height);
-	prevGrid = TextureTarget::create(width, height);
-	pingpongGrid = TextureTarget::create(width, height);
-	verticalDerivative = TextureTarget::create(width, height);
-	sourceObstruct = TextureTarget::create(width, height, PIXELFORMAT_UNCOMPRESSED_R32G32B32A32);
-	pingpongSO = TextureTarget::create(width, height, PIXELFORMAT_UNCOMPRESSED_R32G32B32A32);
+	// TODO: there are errors with creating the framebuffers... fix
+	currentGrid.init(width, height);
+	prevGrid.init(width, height);
+	pingpongGrid.init(width, height);
+	verticalDerivative.init(width, height);
+	sourceObstruct.init(width, height, GL_RGBA32F);
+	pingpongSO.init(width, height, GL_RGBA32F);
 
-	copyShader = LoadShaderFromMemory(fullscreenVertexSource, copyFragSource);
-	c_inputTexture = GetShaderLocation(copyShader, "inputTexture");
+	drawAuxShader = Renderer::compile_shader(Renderer::vertexSource, drawAuxFragSource);
+	n1_sourceObstruct = Renderer::shader_loc(drawAuxShader, "sourceObstruct");
+	n1_mvp = Renderer::shader_loc(drawAuxShader, "mvp");
+	n1_maxValue = Renderer::shader_loc(drawAuxShader, "maxValue");
 
-	drawAuxShader = LoadShaderFromMemory(transformedVertexSource, drawAuxFragSource);
-	n1_sourceObstruct = GetShaderLocation(drawAuxShader, "sourceObstruct");
-	n1_mvp = GetShaderLocation(drawAuxShader, "mvp");
-	n1_maxValue = GetShaderLocation(drawAuxShader, "maxValue");
-
-	progressSoShader = LoadShaderFromMemory(fullscreenVertexSource, progressSoFragSource);
-	n2_sourceObstruct = GetShaderLocation(progressSoShader, "sourceObstruct");
-	n2_speed = GetShaderLocation(progressSoShader, "speed");
+	progressSoShader = Renderer::compile_shader(Renderer::vertexSource, progressSoFragSource);
+	n2_sourceObstruct = Renderer::shader_loc(progressSoShader, "sourceObstruct");
+	n2_speed = Renderer::shader_loc(progressSoShader, "speed");
 	
-	preprocessShader = LoadShaderFromMemory(fullscreenVertexSource, preprocessFragSource);
-	p1_currentGrid = GetShaderLocation(preprocessShader, "currentGrid");
-	p1_sourceObstruct = GetShaderLocation(preprocessShader, "sourceObstruct");
+	preprocessShader = Renderer::compile_shader(Renderer::vertexSource, preprocessFragSource);
+	p1_currentGrid = Renderer::shader_loc(preprocessShader, "currentGrid");
+	p1_sourceObstruct = Renderer::shader_loc(preprocessShader, "sourceObstruct");
 	
-	convolutionShader = LoadShaderFromMemory(fullscreenVertexSource, convolutionFragSource);
-	p2_currentGrid = GetShaderLocation(convolutionShader, "currentGrid");
-	p2_kernel = GetShaderLocation(convolutionShader, "kernel");
-	p2_gridCellSize = GetShaderLocation(convolutionShader, "gridCellSize");
-	p2_kernelRadius = GetShaderLocation(convolutionShader, "kernelRadius");
+	convolutionShader = Renderer::compile_shader(Renderer::vertexSource, convolutionFragSource);
+	p2_currentGrid = Renderer::shader_loc(convolutionShader, "currentGrid");
+	p2_kernel = Renderer::shader_loc(convolutionShader, "kernel");
+	p2_gridCellSize = Renderer::shader_loc(convolutionShader, "gridCellSize");
+	p2_kernelRadius = Renderer::shader_loc(convolutionShader, "kernelRadius");
 	
-	propagateShader = LoadShaderFromMemory(fullscreenVertexSource, propagateFragSource);
-	p3_currentGrid = GetShaderLocation(propagateShader, "currentGrid");
-	p3_prevGrid = GetShaderLocation(propagateShader, "prevGrid");
-	p3_verticalDerivative = GetShaderLocation(propagateShader, "verticalDerivative");
-	p3_coefficients = GetShaderLocation(propagateShader, "coefficients");
+	propagateShader = Renderer::compile_shader(Renderer::vertexSource, propagateFragSource);
+	p3_currentGrid = Renderer::shader_loc(propagateShader, "currentGrid");
+	p3_prevGrid = Renderer::shader_loc(propagateShader, "prevGrid");
+	p3_verticalDerivative = Renderer::shader_loc(propagateShader, "verticalDerivative");
+	p3_coefficients = Renderer::shader_loc(propagateShader, "coefficients");
 
 	reset();
 }
@@ -267,7 +268,7 @@ unsigned int IWaveSurfaceGPU::compute_kernel(int radius) {
 		printf("\n");
 	}
 
-	unsigned int derivativeTexture = TextureTarget::create_only_tex(kernelLength, kernelLength, PIXELFORMAT_UNCOMPRESSED_R32, derivativeKernel);;
+	unsigned int derivativeTexture = Renderer::create_tex(kernelLength, kernelLength, GL_R32F, derivativeKernel);
 	free(derivativeKernel);
 	return derivativeTexture;
 }
@@ -278,48 +279,29 @@ IWaveSurfaceGPU::~IWaveSurfaceGPU() {
 // this might be a bit expensive since it copies a super large texture for each call
 // but we can disregard the performance of it since in a game scenario we would just build the texture from scratch each frame
 void IWaveSurfaceGPU::place_source(int x, int y, float r, float strength) {
-	//rlDrawRenderBatchActive();
-	copy_tex(sourceObstruct, pingpongSO);
+	pingpongSO.copy_from(sourceObstruct);
+	sourceObstruct.set_target();
 
-	rlEnableFramebuffer(sourceObstruct.framebuffer);
-	rlEnableShader(drawAuxShader.id);
+	glUseProgram(drawAuxShader);
 
-	rlDisableDepthTest();
-	rlDisableColorBlend();
-	rlDisableBackfaceCulling();
-	rlDisableDepthMask();
+	glDisable(GL_DEPTH_TEST);
+	glDisable(GL_BLEND);
+	glDisable(GL_CULL_FACE);
 
-	rlActiveTextureSlot(0);
-	rlEnableTexture(pingpongSO.texture);
+	Renderer::bind_tex(0, pingpongSO.texture);
+	Renderer::uniform_tex(drawAuxShader, 0, n1_sourceObstruct);
+	glUniform2f(n1_maxValue, strength, 0.0f);
 
-	rlSetUniformSampler(n1_sourceObstruct, pingpongSO.texture);
+	Renderer::sampler_settings();
+	Renderer::draw_transformed_quad(static_cast<float>(x), static_cast<float>(y), r, r);
+	Renderer::bind_tex(0, 0);
 
-	float maxValue[2] = { strength, 0.0f };
-	rlSetUniform(n1_maxValue, maxValue, RL_SHADER_UNIFORM_VEC2, 1);
+	glEnable(GL_CULL_FACE);
+	glEnable(GL_BLEND);
+	glEnable(GL_DEPTH_TEST);
 
-	rlMatrixMode(RL_PROJECTION);
-	rlPushMatrix();
-
-	rlLoadIdentity();
-	rlOrtho(0.0f, width, 0.0f, height, 0.0f, 1.0f);
-	rlTranslatef(static_cast<float>(x), static_cast<float>(y), 0.0f);
-	rlScalef(r, r, 1.0f);
-
-	Matrix mvp = rlGetMatrixProjection();
-	rlSetUniformMatrix(n1_mvp, mvp);
-	draw_quad();
-
-	rlPopMatrix();
-	rlMatrixMode(RL_MODELVIEW);
-
-	rlDisableTexture();
-
-	rlEnableBackfaceCulling();
-	rlEnableColorBlend();
-	rlEnableDepthTest();
-	rlEnableDepthMask();
-	rlDisableShader();
-	rlDisableFramebuffer();
+	glUseProgram(0);
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
 // sets new values based on the minimum
@@ -328,25 +310,26 @@ void IWaveSurfaceGPU::set_obstruction(int x, int y, float r, float strength) {
 }
 
 void IWaveSurfaceGPU::reset() {
-	rlClearColor(0, 0, 0, 0);
+	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
 	
-	rlEnableFramebuffer(currentGrid.framebuffer);
-	rlClearScreenBuffers();
-	rlEnableFramebuffer(prevGrid.framebuffer);
-	rlClearScreenBuffers();
-	rlEnableFramebuffer(pingpongGrid.framebuffer);
-	rlClearScreenBuffers();
+	currentGrid.set_target();
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	prevGrid.set_target();
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	pingpongGrid.set_target();
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-	rlEnableFramebuffer(verticalDerivative.framebuffer);
-	rlClearScreenBuffers();
+	verticalDerivative.set_target();
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-	rlClearColor(0, 255, 0, 255);
-	rlEnableFramebuffer(sourceObstruct.framebuffer);
-	rlClearScreenBuffers();
-	rlEnableFramebuffer(pingpongSO.framebuffer);
-	rlClearScreenBuffers();
+	glClearColor(0.0f, 1.0f, 0.0f, 1.0f);
 
-	rlDisableFramebuffer();
+	sourceObstruct.set_target();
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	pingpongSO.set_target();
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
 void IWaveSurfaceGPU::sim_frame(float delta) {
@@ -357,7 +340,7 @@ void IWaveSurfaceGPU::sim_frame(float delta) {
 	// - render pingpong to previous
 	// - swap pingpong and current
 
-	const Matrix identity = matrixIdentity();
+	//const Matrix identity = matrixIdentity();
 
 	//
 	// preprocess sources / obstructions
@@ -453,20 +436,25 @@ void IWaveSurfaceGPU::sim_frame(float delta) {
 	rlActiveTextureSlot(2);
 	rlDisableTexture();
 */
-	rlEnableBackfaceCulling();
-	rlEnableDepthTest();
-	rlDisableShader();
-	rlDisableFramebuffer();
+	//rlEnableBackfaceCulling();
+	//rlEnableDepthTest();
+	//rlDisableShader();
+	//rlDisableFramebuffer();
 
 	//std::swap(prevGrid, pingpongGrid);
 }
 
-Texture IWaveSurfaceGPU::get_display() {
-	return {
-		.id = sourceObstruct.texture,
-		.width = width,
-		.height = height,
-		.mipmaps = 1,
-		.format = PIXELFORMAT_UNCOMPRESSED_R32G32B32A32
-	};
+GLuint IWaveSurfaceGPU::get_display() {
+	Renderer::sampler_settings();
+	return sourceObstruct.texture;
+}
+
+void IWaveSurfaceGPU::imgui_builder() {
+	if (ImGui::Begin("IWaveSurfaceGPU")) {
+		ImGui::SeparatorText("Kernel Texture");
+		ImGui::Image(kernelTexture, ImVec2(128, 128));
+
+
+	}
+	ImGui::End();
 }

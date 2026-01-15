@@ -19,6 +19,9 @@ public:
 
 	// uses internal variables to get a texture that can be presented to the screen
 	virtual GLuint get_display() = 0;
+
+	// if the simulation wants to display any data in a UI
+	virtual void imgui_builder() {}
 };
 
 // helper function for displaying

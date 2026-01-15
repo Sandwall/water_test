@@ -2,6 +2,8 @@
 
 #include "surface_sim.h"
 
+#define IWAVESURFACE_CPU
+
 // https://people.computing.clemson.edu/~jtessen/reports/papers_files/Interactive_Water_Surfaces.pdf
 class IWaveSurface : public SurfaceSim {
 	int width = 0, height = 0;
