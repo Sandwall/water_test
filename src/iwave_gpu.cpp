@@ -418,16 +418,14 @@ GLuint IWaveSurfaceGPU::get_display() {
 	return currentGrid.texture;
 }
 
-extern GLFWwindow* window;            // also from main.cpp
+extern int screenWidth, screenHeight; // from main.cpp
 void IWaveSurfaceGPU::imgui_builder(bool* open) {
 	if (open && *open) {
-		int winWidth = 1280, winHeight = 720;
-		glfwGetWindowSize(window, &width, &height);
-		float aspect = static_cast<float>(width) / static_cast<float>(height);
+		float aspect = static_cast<float>(screenWidth) / static_cast<float>(screenHeight);
 		float imgWidth = 128.0f;
 		float imgHeight = imgWidth / aspect;
 
-		ImGui::SetNextWindowPos(ImVec2(winWidth - (2 * imgWidth), 16), ImGuiCond_Appearing);
+		ImGui::SetNextWindowPos(ImVec2(screenWidth - (2 * imgWidth), 16), ImGuiCond_Appearing);
 
 		if (ImGui::Begin("IWaveSurfaceGPU"), open, ImGuiWindowFlags_AlwaysAutoResize) {
 			ImGui::SeparatorText("Kernel Texture");

@@ -11,51 +11,34 @@
 #include <stdint.h>
 
 #include <algorithm>
-#include <chrono> // for framerate limiting... don't want to make a wrapper function for different platforms
 
 #include "gl_renderer.h"
 //#include "iwave.h"
 #include "iwave_gpu.h"
 
 #if defined(IWAVESURFACE_GPU)
-// GPU version is still very much incomplete
 #define IWaveSurfaceObject IWaveSurfaceGPU
 #elif defined(IWAVESURFACE_CPU)
 #define IWaveSurfaceObject IWaveSurface
 #endif
 
+#include "util.hpp"
+
 int screenWidth = 1280, screenHeight = 720;
-const int divFactor = 1;
+const int divFactor = 4;
 int simWidth = screenWidth / divFactor;
 int simHeight = screenHeight / divFactor;
 bool guiOpen = true;
 
-// currently a leftover from the previous raylib iteration, which had functionality to set target FPS
-// TODO: implement frame limiting, currently the program is limited by refresh rate because of vsync
-constexpr int targetFps = 60;
+float strokeRadius = static_cast<float>(simHeight / 17);
+
+constexpr int targetFps = 75;
 constexpr double targetFrameTime = 1.0f / static_cast<double>(targetFps);
 double frameTime = targetFrameTime;
 
+RollingAverageSmoother<double, targetFps> smoothedFrameTime;
+
 #define print_err(x) fprintf(stderr, x);
-
-struct Point2 {
-	int x, y;
-
-	Point2() {
-		x = 0;
-		y = 0;
-	}
-
-	Point2(int px, int py) {
-		x = px;
-		y = py;
-	}
-
-	void operator=(const ImVec2& vec) {
-		x = static_cast<int>(vec.x);
-		y = static_cast<int>(vec.y);
-	}
-};
 
 GLFWwindow* window = nullptr;
 
@@ -89,9 +72,9 @@ int main(int argc, char** argv) {
 
 		if (!io.WantCaptureMouse) {
 			if (io.MouseDown[0]) {
-				surface.place_source(simPos.x, simPos.y, 50.0f, 1.0f);
+				surface.place_source(simPos.x, simPos.y, strokeRadius, 1.0f);
 			} else if (io.MouseDown[1]) {
-				surface.set_obstruction(simPos.x, simPos.y, 25.0f, 1.0f);
+				surface.set_obstruction(simPos.x, simPos.y, strokeRadius, 1.0f);
 			}
 		}
 
@@ -122,11 +105,8 @@ int main(int argc, char** argv) {
 		ImGui::Render();
 
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
 		glfwGetFramebufferSize(window, &screenWidth, &screenHeight);
-		
 		glViewport(0, 0, screenWidth, screenHeight);
-		
 		glClearColor(1.0, 0.0, 1.0, 1.0);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -141,6 +121,7 @@ int main(int argc, char** argv) {
 
 		glFinish(); // blocks until GPU commands are done
 		frameTime = glfwGetTime() - startTime;
+		smoothedFrameTime.push(frameTime);
 
 		if (frameTime < targetFrameTime) {
 			int sleepMs = static_cast<int>(1000.0f * (targetFrameTime - frameTime));
@@ -157,7 +138,8 @@ static void imgui_builder(bool* open) {
 
 	if (open && *open) {
 		if (ImGui::Begin("Details"), open, ImGuiWindowFlags_AlwaysAutoResize) {
-			ImGui::LabelText("Render Frame Time", "%f ms", frameTime * 1000.0f);
+			ImGui::LabelText("Render Frame Time", "%f ms", frameTime * 1000.0);
+			ImGui::LabelText("Smooth Frame Time", "%f ms", smoothedFrameTime.get() * 1000.0);
 			ImGui::LabelText("Target Frame Time", "%f ms", targetFrameTime * 1000.0);
 			ImGui::LabelText("Render FPS", "%f fps", frameTime != 0.0f ? 1.0f / frameTime : 0.0f);
 			ImGui::LabelText("Target FPS", "%d fps", targetFps);

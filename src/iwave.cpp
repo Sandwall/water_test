@@ -132,12 +132,12 @@ void IWaveSurface::place_source(int x, int y, float r, float strength) {
 
 	for (int iy = -s; iy <= s; iy++) {
 		for (int ix = -s; ix <= s; ix++) {
-			float ir = 5.0f - sqrtf(static_cast<float>((iy * iy) + (ix * ix)));
+			float ir = r - sqrtf(static_cast<float>((iy * iy) + (ix * ix)));
 			if (ir > 0.0f) {
 				int idx = get_idx(x + ix, y + iy);
 				if (idx < 0) return;
 
-				source[idx] = ir;
+				source[idx] = ir * strength;
 			}
 		}
 	}
@@ -146,6 +146,7 @@ void IWaveSurface::place_source(int x, int y, float r, float strength) {
 // sets new values based on the minimum
 void IWaveSurface::set_obstruction(int x, int y, float r, float strength) {
 	int extent = static_cast<int>(fabsf(r + 0.5f));
+	strength = 1.0f - strength;
 
 	for (int iy = -extent; iy <= extent; iy++) {
 		for (int ix = -extent; ix <= extent; ix++) {

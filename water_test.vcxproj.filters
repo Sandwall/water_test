@@ -95,5 +95,8 @@
     <ClInclude Include="src\iwave_gpu.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\util.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
