@@ -11,10 +11,11 @@
 #include <stdint.h>
 
 #include <algorithm>
+#include <chrono> // for framerate limiting... don't want to make a wrapper function for different platforms
 
 #include "gl_renderer.h"
-#include "iwave.h"
-//#include "iwave_gpu.h"
+//#include "iwave.h"
+#include "iwave_gpu.h"
 
 #if defined(IWAVESURFACE_GPU)
 // GPU version is still very much incomplete
@@ -23,17 +24,17 @@
 #define IWaveSurfaceObject IWaveSurface
 #endif
 
-int screenWidth = 640, screenHeight = 360;
-const int divFactor = 4;
+int screenWidth = 1280, screenHeight = 720;
+const int divFactor = 1;
 int simWidth = screenWidth / divFactor;
 int simHeight = screenHeight / divFactor;
 bool guiOpen = true;
 
 // currently a leftover from the previous raylib iteration, which had functionality to set target FPS
 // TODO: implement frame limiting, currently the program is limited by refresh rate because of vsync
-constexpr int targetFps = 30;
-constexpr float targetFrameTime = 1.0f / static_cast<float>(targetFps);
-float frameTime = targetFrameTime;
+constexpr int targetFps = 60;
+constexpr double targetFrameTime = 1.0f / static_cast<double>(targetFps);
+double frameTime = targetFrameTime;
 
 #define print_err(x) fprintf(stderr, x);
 
@@ -58,10 +59,9 @@ struct Point2 {
 
 GLFWwindow* window = nullptr;
 
-void imgui_builder(bool* open);
-
 int do_init();
 void do_cleanup();
+void imgui_builder(bool* open);
 
 int main(int argc, char** argv) {
 	if (0 != do_init())
@@ -70,12 +70,8 @@ int main(int argc, char** argv) {
 	Renderer::init();
 	IWaveSurfaceObject surface(simWidth, simHeight, 6);
 
-	double currentTime = glfwGetTime();
-	double prevTime = currentTime - targetFrameTime;
 	while (!glfwWindowShouldClose(window)) {
-		prevTime = currentTime;
-		currentTime = glfwGetTime();
-		frameTime = static_cast<float>(currentTime - prevTime);
+		double startTime = glfwGetTime();
 
 		glfwPollEvents();
 		if (0 != glfwGetWindowAttrib(window, GLFW_ICONIFIED)) {
@@ -94,8 +90,8 @@ int main(int argc, char** argv) {
 		if (!io.WantCaptureMouse) {
 			if (io.MouseDown[0]) {
 				surface.place_source(simPos.x, simPos.y, 50.0f, 1.0f);
-			} else if (io.MouseDown[2]) {
-				surface.set_obstruction(simPos.x, simPos.y, 2.0f, 0.0f);
+			} else if (io.MouseDown[1]) {
+				surface.set_obstruction(simPos.x, simPos.y, 25.0f, 1.0f);
 			}
 		}
 
@@ -109,10 +105,12 @@ int main(int argc, char** argv) {
 			}
 		}
 
-		if (frameTime > targetFrameTime)
-			surface.sim_frame(targetFrameTime);
-		else
-			surface.sim_frame(frameTime);
+		surface.sim_frame(static_cast<float>(targetFrameTime));
+		
+		//if (frameTime > targetFrameTime)
+		//	surface.sim_frame(targetFrameTime);
+		//else
+		//	surface.sim_frame(frameTime);
 
 		ImGui_ImplOpenGL3_NewFrame();
 		ImGui_ImplGlfw_NewFrame();
@@ -133,16 +131,21 @@ int main(int argc, char** argv) {
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 		// shader location could be cached...
-		Renderer::uniform_tex(Renderer::regularShader, 0, Renderer::shader_loc(Renderer::regularShader, "inputTexture"));
-
-		Renderer::bind_tex(0, surface.get_display());
-		Renderer::sampler_settings();
-		glUseProgram(Renderer::regularShader);
+		Renderer::attach_tex(Renderer::flippedShader, Renderer::shader_loc(Renderer::flippedShader, "inputTexture"), surface.get_display(), 0);
+		glUseProgram(Renderer::flippedShader);
 		Renderer::draw_quad();
 		Renderer::bind_tex(0, 0);
 
 		ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 		glfwSwapBuffers(window);
+
+		glFinish(); // blocks until GPU commands are done
+		frameTime = glfwGetTime() - startTime;
+
+		if (frameTime < targetFrameTime) {
+			int sleepMs = static_cast<int>(1000.0f * (targetFrameTime - frameTime));
+			ImGui_ImplGlfw_Sleep(sleepMs);
+		}
 	}
 
 	do_cleanup();
@@ -153,9 +156,11 @@ static void imgui_builder(bool* open) {
 	ImGuiIO& io = ImGui::GetIO();
 
 	if (open && *open) {
-		if (ImGui::Begin("Details"), open) {
-			ImGui::LabelText("Frame Time", "%f ms", frameTime * 1000.0f);
-			ImGui::LabelText("FPS", "%f fps", frameTime != 0.0f ? 1.0f / frameTime : 0.0f);
+		if (ImGui::Begin("Details"), open, ImGuiWindowFlags_AlwaysAutoResize) {
+			ImGui::LabelText("Render Frame Time", "%f ms", frameTime * 1000.0f);
+			ImGui::LabelText("Target Frame Time", "%f ms", targetFrameTime * 1000.0);
+			ImGui::LabelText("Render FPS", "%f fps", frameTime != 0.0f ? 1.0f / frameTime : 0.0f);
+			ImGui::LabelText("Target FPS", "%d fps", targetFps);
 			ImGui::LabelText("Mouse Pos", "%f %f", io.MousePos.x, io.MousePos.y);
 			ImGui::LabelText("LBM Down", io.MouseDown[0] ? "True" : "False");
 			ImGui::LabelText("RBM Down", io.MouseDown[2] ? "True" : "False");
@@ -227,7 +232,7 @@ static inline int do_init() {
 
 	glfwSetWindowAttrib(window, GLFW_RESIZABLE, GLFW_FALSE);
 	glfwMakeContextCurrent(window);
-	glfwSwapInterval(1);
+	glfwSwapInterval(0);
 
 	if (gl3wInit()) {
 		fprintf(stderr, "Error: GL3W initialization failed!\n");

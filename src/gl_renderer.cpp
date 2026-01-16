@@ -191,6 +191,24 @@ out vec2 screenUv;
 
 void main() {
 	// flipping vertical texture coordinates
+	fragUv = vec2(vertexTexCoord.x, vertexTexCoord.y);
+	screenUv = (vertexPosition + 1.0) / 2.0;
+	
+	gl_Position = vec4(vertexPosition, 0.0, 1.0);
+}
+)";
+
+const char* Renderer::flippedVertexSource = /* vertex shader */ R"(
+#version 460 core
+
+in vec2 vertexPosition;
+in vec2 vertexTexCoord;
+
+out vec2 fragUv;
+out vec2 screenUv;
+
+void main() {
+	// flipping vertical texture coordinates
 	fragUv = vec2(vertexTexCoord.x, 1.0 - vertexTexCoord.y);
 	screenUv = (vertexPosition + 1.0) / 2.0;
 	
@@ -218,7 +236,7 @@ GLuint Renderer::tQuadVao;
 GLuint Renderer::tQuadVbo;
 GLuint Renderer::quadVao;
 GLuint Renderer::quadVbo;
-GLuint Renderer::regularShader;
+GLuint Renderer::flippedShader;
 
 constexpr int QUAD_VERTICES_LENGTH = 24;
 float regularVertices[QUAD_VERTICES_LENGTH] = {
@@ -258,7 +276,7 @@ void Renderer::init() {
 	glVertexAttribPointer(1, 2, GL_FLOAT, false, sizeof(float) * 4, (void*)(sizeof(float) * 2));
 	glBindVertexArray(0);
 
-	regularShader = compile_shader(vertexSource, sampleTextureFragSource);
+	flippedShader = compile_shader(flippedVertexSource, sampleTextureFragSource);
 }
 
 void Renderer::cleanup() {
@@ -268,8 +286,8 @@ void Renderer::cleanup() {
 void Renderer::sampler_settings() {
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 }
 
 GLuint Renderer::create_tex(int w, int h, int format, const void* data) {
@@ -347,30 +365,37 @@ GLuint Renderer::compile_shader(const char* vs, const char* fs) {
 //
 // these functions exist more for organizational purposes than functional
 //
+GLint Renderer::shader_loc(GLuint shader, const char* location) {
+	return glGetUniformLocation(shader, location);
+}
+
 void Renderer::bind_tex(GLuint textureSlot, GLuint texture) {
 	glActiveTexture(GL_TEXTURE0 + textureSlot);
 	glBindTexture(GL_TEXTURE_2D, texture);
 }
 
-GLuint Renderer::shader_loc(GLuint shader, const char* location) {
-	return glGetUniformLocation(shader, location);
+void Renderer::uniform_tex(GLuint shader, GLuint slot, GLint location) {
+	glUseProgram(shader);
+	glUniform1i(location, slot);
 }
 
-void Renderer::uniform_tex(GLuint shader, GLuint texture, GLuint location) {
-	glUseProgram(shader);
-	glUniform1i(location, texture);
+// this function combines bind_tex and uniform_tex
+// it binds a texture to a texture unit, and then assigns that texture unit to a uniform in a shader
+void Renderer::attach_tex(GLuint shader, GLint location, GLuint texture, GLuint textureSlot) {
+	bind_tex(textureSlot, texture);
+	uniform_tex(shader, textureSlot, location);
 }
 
 void Renderer::draw_quad() {
-	glDisable(GL_DEPTH_TEST);
-	glDisable(GL_CULL_FACE);
+	//glDisable(GL_DEPTH_TEST);
+	//glDisable(GL_CULL_FACE);
 
 	glBindVertexArray(quadVao);
 	glDrawArrays(GL_TRIANGLES, 0, 6);
 	glBindVertexArray(0);
 	
-	glEnable(GL_CULL_FACE);
-	glEnable(GL_DEPTH_TEST);
+	//glEnable(GL_CULL_FACE);
+	//glEnable(GL_DEPTH_TEST);
 }
 
 void Renderer::draw_transformed_quad(float x, float y, float w, float h) {

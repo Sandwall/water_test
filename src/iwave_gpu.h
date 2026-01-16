@@ -28,16 +28,18 @@ class IWaveSurfaceGPU : public SurfaceSim {
 	GLuint convolutionShader;
 	GLuint propagateShader;
 
-	GLuint n1_sourceObstruct, n1_mvp, n1_maxValue;
-	GLuint n2_sourceObstruct, n2_speed;
+	GLint n1_sourceObstruct, n1_maxValue;
+	GLint n2_sourceObstruct, n2_speed;
 
-	GLuint p1_currentGrid, p1_sourceObstruct;
-	GLuint p2_currentGrid, p2_kernel, p2_gridCellSize, p2_kernelRadius;
-	GLuint p3_currentGrid, p3_prevGrid, p3_verticalDerivative, p3_coefficients;
+	GLint p1_currentGrid, p1_sourceObstruct;
+	GLint p2_currentGrid, p2_kernel, p2_kernelCellSize, p2_gridCellSize, p2_kernelRadius;
+	GLint p3_currentGrid, p3_prevGrid, p3_verticalDerivative, p3_coefficients;
 	
 	int kernelRadius = 0;
 	unsigned int kernelTexture;
 	unsigned int compute_kernel(int radius);
+
+	void draw_aux(int x, int y, float r, float v1, float v2);
 
 public:
 	float velocityDamping;

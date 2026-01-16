@@ -1,6 +1,7 @@
 #include "iwave_gpu.h"
 
 #include <GL/gl3w.h>
+#include <GLFW/glfw3.h>
 #include "external/imgui.h"
 
 #include <stdlib.h> // for calloc/free
@@ -37,13 +38,12 @@ void main() {
 	}
 
 	// replace obstructions
-	//if(maxValue.y < 0.0) {
-	//	outColor.y = 1.0 - maxValue.y;
-	//	outColor.a = 1.0;
-	//} else {
-	//	outColor.y = dist * maxValue.y;
-	//	outColor.a = dist;
-	//}
+	if(maxValue.y < 0.0) {
+		// maxValue.y == -1.0 means it gets set to 0
+		outColor.y = 1.0 + maxValue.y;
+	} else {
+		//outColor.y = dist * maxValue.y;
+	}
 }
 )";
 
@@ -70,7 +70,8 @@ float to_zero(float x, float s) {
 
 void main() {
 	nextValue = texture(sourceObstruct, fragUv);
-	nextValue.r = to_zero(nextValue.r, speed);
+	nextValue.r = 0.0;
+	//nextValue.r = to_zero(nextValue.r, speed);
 }
 )";
 
@@ -108,6 +109,7 @@ out vec4 nextValue;
 
 uniform sampler2D currentGrid;
 uniform sampler2D kernel;
+uniform vec2 kernelCellSize;
 uniform vec2 gridCellSize;
 uniform int kernelRadius;
 
@@ -135,11 +137,10 @@ void main() {
 
 	for(int y = -kernelRadius; y <= kernelRadius; y++) {
 		for(int x = -kernelRadius; x <= kernelRadius; x++) {
-			vec2 offsetUv = vec2(kernelRadius, kernelRadius) * gridCellSize;
-			float kernelValue = texture(kernel, offsetUv + 0.5).r;
-
-			offsetUv = reflect_uv(fragUv + offsetUv);
-			sum += kernelValue + texture(currentGrid, offsetUv).r;
+			vec2 offset = vec2(x, y);
+			float kernelValue = 
+			sum += texture(kernel, (offset * kernelCellSize) + 0.5).r
+				*  texture(currentGrid, reflect_uv(fragUv + (offset * gridCellSize))).r;
 		}
 	}
 
@@ -198,7 +199,6 @@ IWaveSurfaceGPU::IWaveSurfaceGPU(int w, int h, int p) {
 
 	drawAuxShader = Renderer::compile_shader(Renderer::vertexSource, drawAuxFragSource);
 	n1_sourceObstruct = Renderer::shader_loc(drawAuxShader, "sourceObstruct");
-	n1_mvp = Renderer::shader_loc(drawAuxShader, "mvp");
 	n1_maxValue = Renderer::shader_loc(drawAuxShader, "maxValue");
 
 	progressSoShader = Renderer::compile_shader(Renderer::vertexSource, progressSoFragSource);
@@ -213,6 +213,7 @@ IWaveSurfaceGPU::IWaveSurfaceGPU(int w, int h, int p) {
 	p2_currentGrid = Renderer::shader_loc(convolutionShader, "currentGrid");
 	p2_kernel = Renderer::shader_loc(convolutionShader, "kernel");
 	p2_gridCellSize = Renderer::shader_loc(convolutionShader, "gridCellSize");
+	p2_kernelCellSize = Renderer::shader_loc(convolutionShader, "kernelCellSize");
 	p2_kernelRadius = Renderer::shader_loc(convolutionShader, "kernelRadius");
 	
 	propagateShader = Renderer::compile_shader(Renderer::vertexSource, propagateFragSource);
@@ -280,8 +281,8 @@ IWaveSurfaceGPU::~IWaveSurfaceGPU() {
 }
 
 // this might be a bit expensive since it copies a super large texture for each call
-// but we can disregard the performance of it since in a game scenario we would just build the texture from scratch each frame
-void IWaveSurfaceGPU::place_source(int x, int y, float r, float strength) {
+// but we can disregard the performance of it since in a game scenario we would just draw the texture from scratch each frame
+void IWaveSurfaceGPU::draw_aux(int x, int y, float r, float v1, float v2) {
 	pingpongSO.copy_from(sourceObstruct);
 	sourceObstruct.set_target();
 
@@ -291,9 +292,8 @@ void IWaveSurfaceGPU::place_source(int x, int y, float r, float strength) {
 	glDisable(GL_BLEND);
 	glDisable(GL_CULL_FACE);
 
-	Renderer::bind_tex(0, pingpongSO.texture);
-	Renderer::uniform_tex(drawAuxShader, 0, n1_sourceObstruct);
-	glUniform2f(n1_maxValue, strength, 0.0f);
+	Renderer::attach_tex(drawAuxShader, n1_sourceObstruct, pingpongSO.texture, 0);
+	glUniform2f(n1_maxValue, v1, v2);
 
 	Renderer::draw_transformed_quad(static_cast<float>(x), static_cast<float>(y), r, r);
 	Renderer::bind_tex(0, 0);
@@ -306,9 +306,12 @@ void IWaveSurfaceGPU::place_source(int x, int y, float r, float strength) {
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
-// sets new values based on the minimum
+void IWaveSurfaceGPU::place_source(int x, int y, float r, float strength) {
+	draw_aux(x, y, r, strength, 0.0f);
+}
+
 void IWaveSurfaceGPU::set_obstruction(int x, int y, float r, float strength) {
-	// copied straight from place_source and tweaked
+	draw_aux(x, y, r, 0.0f, -strength);
 }
 
 void IWaveSurfaceGPU::reset() {
@@ -335,14 +338,16 @@ void IWaveSurfaceGPU::reset() {
 }
 
 void IWaveSurfaceGPU::sim_frame(float delta) {
+	glDisable(GL_DEPTH_TEST);
+	glDisable(GL_BLEND);
+	glDisable(GL_CULL_FACE);
+
 	// our steps are as follows:
 	// - render to pingpong, use sourceObstruct as input
 	// - render to verticalDerivative, use pingpong as input
 	// - render to currentGrid, use previousGrid as input, and read from current value of pingpong
 	// - render pingpong to previous
 	// - swap pingpong and current
-
-	//const Matrix identity = matrixIdentity();
 
 	//
 	// preprocess sources / obstructions
@@ -352,67 +357,43 @@ void IWaveSurfaceGPU::sim_frame(float delta) {
 	currentGrid.set_target();
 	glUseProgram(preprocessShader);
 
-	Renderer::bind_tex(0, pingpongGrid.texture);
-	Renderer::uniform_tex(preprocessShader, pingpongGrid.texture, p1_currentGrid);
-	Renderer::bind_tex(1, sourceObstruct.texture);
-	Renderer::uniform_tex(preprocessShader, sourceObstruct.texture, p1_sourceObstruct);
-
+	Renderer::attach_tex(preprocessShader, p1_currentGrid, pingpongGrid.texture, 0);
+	Renderer::attach_tex(preprocessShader, p1_sourceObstruct, sourceObstruct.texture, 1);
 	Renderer::draw_quad();
 
 	// progress source obstruct (either fade sources towards 0 or zero them out)
 	pingpongSO.copy_from(sourceObstruct);
 	sourceObstruct.set_target();
-
 	glUseProgram(progressSoShader);
-	Renderer::bind_tex(0, pingpongSO.texture);
-	Renderer::uniform_tex(progressSoShader, pingpongSO.texture, n2_sourceObstruct);
-	glUniform1f(n2_speed, delta);
 
+	Renderer::attach_tex(progressSoShader, n2_sourceObstruct, pingpongSO.texture, 0);
+	glUniform1f(n2_speed, delta);
 	Renderer::draw_quad();
 
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
 	//
 	// convolve grid with kernel, put it into verticalDerivative
 	//
-	/*rlEnableFramebuffer(verticalDerivative.framebuffer);
-	rlEnableShader(convolutionShader.id);
+	verticalDerivative.set_target();
+	glUseProgram(convolutionShader);
 
-	rlActiveTextureSlot(0);
-	rlEnableTexture(currentGrid.texture);
-	rlActiveTextureSlot(1);
-	rlEnableTexture(kernelTexture);
-	rlSetUniformSampler(p2_currentGrid, currentGrid.texture);
-	rlSetUniformSampler(p2_kernel, kernelTexture);
-	float gridCellSize[2] = { 1.0f / static_cast<float>(width), 1.0f / static_cast<float>(height) };
-	rlSetUniform(p2_gridCellSize, gridCellSize, RL_SHADER_UNIFORM_VEC2, 1);
-	rlSetUniform(p2_kernelRadius, &kernelRadius, RL_SHADER_UNIFORM_INT, 1);
-
-	draw_quad();
-
-	rlActiveTextureSlot(0);
-	rlDisableTexture();
-	rlActiveTextureSlot(1);
-	rlDisableTexture();*/
+	Renderer::attach_tex(convolutionShader, p2_currentGrid, currentGrid.texture, 0);
+	Renderer::attach_tex(convolutionShader, p2_kernel, kernelTexture, 1);
+	glUniform2f(p2_gridCellSize, 1.0f / static_cast<float>(width), 1.0f / static_cast<float>(height));
+	glUniform2f(p2_kernelCellSize, 1.0f / static_cast<float>((kernelRadius * 2) + 1), 1.0f / static_cast<float>((kernelRadius * 2) + 1));
+	glUniform1i(p2_kernelRadius, kernelRadius);
+	Renderer::draw_quad();
 
 	//
 	// apply propagation
 	//
-
-/*
-	rlEnableFramebuffer(pingpongGrid.framebuffer);
-	rlEnableShader(propagateShader.id);
-
-	rlActiveTextureSlot(0);
-	rlEnableTexture(currentGrid.texture);
-	rlActiveTextureSlot(1);
-	rlEnableTexture(prevGrid.texture);
-	rlActiveTextureSlot(2);
-	rlEnableTexture(verticalDerivative.texture);
-
-	rlSetUniformSampler(p3_currentGrid, pingpongGrid.texture);
-	rlSetUniformSampler(p3_prevGrid, prevGrid.texture);
-	rlSetUniformSampler(p3_verticalDerivative, verticalDerivative.texture);
+	pingpongGrid.copy_from(currentGrid);
+	currentGrid.set_target();
+	glUseProgram(propagateShader);
+	
+	Renderer::attach_tex(propagateShader, p3_currentGrid, currentGrid.texture, 0);
+	Renderer::attach_tex(propagateShader, p3_prevGrid, prevGrid.texture, 1);
+	Renderer::attach_tex(propagateShader, p3_verticalDerivative, verticalDerivative.texture, 2);
 
 	// these mirror the coefficients of currentGrid, prevGrid, verticalDerivative in the CPU version
 	float alphaDt = velocityDamping * delta;
@@ -421,36 +402,47 @@ void IWaveSurfaceGPU::sim_frame(float delta) {
 		-1.0f / (1.0f + alphaDt),
 		-accelerationTerm * delta * delta / (1.0f + alphaDt)
 	};
-	rlSetUniform(p3_coefficients, coefficients, RL_SHADER_UNIFORM_VEC3, 1);
+	glUniform3f(p3_coefficients, coefficients[0], coefficients[1], coefficients[2]);
+	Renderer::draw_quad();
 
-	draw_quad();
+	prevGrid.copy_from(pingpongGrid);
 
-	rlActiveTextureSlot(0);
-	rlDisableTexture();
-	rlActiveTextureSlot(1);
-	rlDisableTexture();
-	rlActiveTextureSlot(2);
-	rlDisableTexture();
-*/
-	//rlEnableBackfaceCulling();
-	//rlEnableDepthTest();
-	//rlDisableShader();
-	//rlDisableFramebuffer();
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-	//std::swap(prevGrid, pingpongGrid);
+	glEnable(GL_CULL_FACE);
+	glEnable(GL_BLEND);
+	glEnable(GL_DEPTH_TEST);
 }
 
 GLuint IWaveSurfaceGPU::get_display() {
-	Renderer::sampler_settings();
-	return sourceObstruct.texture;
+	return currentGrid.texture;
 }
 
+extern GLFWwindow* window;            // also from main.cpp
 void IWaveSurfaceGPU::imgui_builder(bool* open) {
 	if (open && *open) {
-		if (ImGui::Begin("IWaveSurfaceGPU"), open) {
+		int winWidth = 1280, winHeight = 720;
+		glfwGetWindowSize(window, &width, &height);
+		float aspect = static_cast<float>(width) / static_cast<float>(height);
+		float imgWidth = 128.0f;
+		float imgHeight = imgWidth / aspect;
+
+		ImGui::SetNextWindowPos(ImVec2(winWidth - (2 * imgWidth), 16), ImGuiCond_Appearing);
+
+		if (ImGui::Begin("IWaveSurfaceGPU"), open, ImGuiWindowFlags_AlwaysAutoResize) {
 			ImGui::SeparatorText("Kernel Texture");
-			ImGui::Image(kernelTexture, ImVec2(128, 128));
+			ImGui::Image(kernelTexture, ImVec2(imgWidth, imgWidth));
+
+			ImGui::SeparatorText("Source and Obstructions");
+			ImGui::Image(sourceObstruct.texture, ImVec2(imgWidth, imgHeight));
+
+			ImGui::SeparatorText("Vertical Derivative");
+			ImGui::Image(verticalDerivative.texture, ImVec2(imgWidth, imgHeight));
+
+			ImGui::SeparatorText("Previous Grid");
+			ImGui::Image(prevGrid.texture, ImVec2(imgWidth, imgHeight));
 		}
+
 		ImGui::End();
 	}
 }

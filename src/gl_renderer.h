@@ -21,7 +21,8 @@ class Renderer {
 	static GLuint quadVao, quadVbo;
 public:
 	static const char* vertexSource;
-	static GLuint regularShader;
+	static const char* flippedVertexSource;
+	static GLuint flippedShader;
 
 	static void init(); // requires all GL initialization is done
 	static void cleanup();
@@ -37,9 +38,12 @@ public:
 	static void sampler_settings();
 	static GLuint create_tex(int w, int h, int format = GL_R32F, const void* data = nullptr);
 	static GLuint compile_shader(const char* vs, const char* fs);
+	
+	static GLint shader_loc(GLuint shader, const char* location);
+
 	static void bind_tex(GLuint textureSlot, GLuint texture);
-	static GLuint shader_loc(GLuint shader, const char* location);
-	static void uniform_tex(GLuint shader, GLuint texture, GLuint location);
+	static void uniform_tex(GLuint shader, GLuint texture, GLint location);
+	static void attach_tex(GLuint shader, GLint location, GLuint texture, GLuint textureSlot);
 
 	static void draw_quad();
 	static void draw_transformed_quad(float x, float y, float w, float h);
