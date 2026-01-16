@@ -348,35 +348,29 @@ void IWaveSurfaceGPU::sim_frame(float delta) {
 	// preprocess sources / obstructions
 	//
 
-	//copy_tex(currentGrid, pingpongGrid);
+	pingpongGrid.copy_from(currentGrid);
+	currentGrid.set_target();
+	glUseProgram(preprocessShader);
 
-	//rlEnableFramebuffer(currentGrid.framebuffer);
-	//rlEnableShader(preprocessShader.id);
+	Renderer::bind_tex(0, pingpongGrid.texture);
+	Renderer::uniform_tex(preprocessShader, pingpongGrid.texture, p1_currentGrid);
+	Renderer::bind_tex(1, sourceObstruct.texture);
+	Renderer::uniform_tex(preprocessShader, sourceObstruct.texture, p1_sourceObstruct);
 
-	//rlActiveTextureSlot(0);
-	//rlEnableTexture(pingpongGrid.texture);
-	//rlSetUniformSampler(p1_currentGrid, pingpongGrid.texture);
-	//rlActiveTextureSlot(1);
-	//rlEnableTexture(sourceObstruct.texture);
-	//rlSetUniformSampler(p1_sourceObstruct, sourceObstruct.texture);
-
-	//draw_quad();
-
-	//rlActiveTextureSlot(0);
-	//rlDisableTexture();
-	//rlActiveTextureSlot(1);
-	//rlDisableTexture();
+	Renderer::draw_quad();
 
 	// progress source obstruct (either fade sources towards 0 or zero them out)
-	//copy_tex(sourceObstruct, pingpongSO);
-	//rlEnableFramebuffer(sourceObstruct.framebuffer);
-	//rlEnableShader(progressSoShader.id);
-	//rlActiveTextureSlot(0);
-	//rlEnableTexture(pingpongSO.texture);
-	//rlSetUniformSampler(n2_sourceObstruct, pingpongSO.texture);
-	//rlSetUniform(n2_speed, &delta, RL_SHADER_UNIFORM_FLOAT, 1);
-	//draw_quad();
-	//rlDisableTexture();
+	pingpongSO.copy_from(sourceObstruct);
+	sourceObstruct.set_target();
+
+	glUseProgram(progressSoShader);
+	Renderer::bind_tex(0, pingpongSO.texture);
+	Renderer::uniform_tex(progressSoShader, pingpongSO.texture, n2_sourceObstruct);
+	glUniform1f(n2_speed, delta);
+
+	Renderer::draw_quad();
+
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
 	//
 	// convolve grid with kernel, put it into verticalDerivative
@@ -451,12 +445,12 @@ GLuint IWaveSurfaceGPU::get_display() {
 	return sourceObstruct.texture;
 }
 
-void IWaveSurfaceGPU::imgui_builder() {
-	if (ImGui::Begin("IWaveSurfaceGPU")) {
-		ImGui::SeparatorText("Kernel Texture");
-		ImGui::Image(kernelTexture, ImVec2(128, 128));
-
-
+void IWaveSurfaceGPU::imgui_builder(bool* open) {
+	if (open && *open) {
+		if (ImGui::Begin("IWaveSurfaceGPU"), open) {
+			ImGui::SeparatorText("Kernel Texture");
+			ImGui::Image(kernelTexture, ImVec2(128, 128));
+		}
+		ImGui::End();
 	}
-	ImGui::End();
 }

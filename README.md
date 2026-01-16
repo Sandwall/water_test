@@ -9,3 +9,9 @@ To compile, you need to have Visual Studio installed with the C++ workload. Make
 
 ## Usage
 While the program is running, you can left click/drag left click on the window to create sources, which will displace the surface, and you can do the same for right click to create obstructions. You can hit space to reset the simulation to the initial state.
+
+## Screenshot
+Here's a screenshot of the single-threaded CPU simulation running on a 160x90 grid:
+
+
+![CPU Simulation on 160x90 grid](doc/cpu_160x90.png)

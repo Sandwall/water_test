@@ -52,5 +52,5 @@ public:
 	void reset() override;
 	GLuint get_display() override;
 
-	void imgui_builder();
+	void imgui_builder(bool* open = nullptr);
 };

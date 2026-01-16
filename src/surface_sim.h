@@ -21,7 +21,7 @@ public:
 	virtual GLuint get_display() = 0;
 
 	// if the simulation wants to display any data in a UI
-	virtual void imgui_builder() {}
+	virtual void imgui_builder(bool* open = nullptr) {}
 };
 
 // helper function for displaying

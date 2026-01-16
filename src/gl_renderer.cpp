@@ -41,8 +41,9 @@ void TextureTarget::init(int w, int h, int format) {
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
-void TextureTarget::set_target() {
+void TextureTarget::set_target() const {
 	glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+	glViewport(0, 0, width, height);
 }
 
 void TextureTarget::clean() {
@@ -55,10 +56,12 @@ void TextureTarget::clean() {
 	framebuffer = 0;
 }
 
+// TODO(important!): this is definitely a problem function
+// it looks like if you bind the framebuffer as GL_READ_BUFFER we get the expected output, but a 1280 error
+// but if you bind it as GL_FRAMEBUFFER, you get no 1280 error, but the expected behavior only occurs on a small line horizontal line strip
+// in the center of the framebuffer... why?? maybe it has to do with UV flipping? we can try to use the copy shader from before if this doesn't work...
 void TextureTarget::copy_from(const TextureTarget& from) {
-	glBindFramebuffer(GL_READ_BUFFER, from.framebuffer);
-	glCopyTextureSubImage2D(texture, 0, 0, 0, 0, 0, width, height);
-	glBindFramebuffer(GL_READ_BUFFER, 0);
+	glCopyImageSubData(from.texture, GL_TEXTURE_2D, 0, 0, 0, 0, texture, GL_TEXTURE_2D, 0, 0, 0, 0, width, height, 1);
 }
 
 
@@ -190,7 +193,6 @@ void main() {
 	// flipping vertical texture coordinates
 	fragUv = vec2(vertexTexCoord.x, 1.0 - vertexTexCoord.y);
 	screenUv = (vertexPosition + 1.0) / 2.0;
-	screenUv.y = 1.0 - screenUv.y;
 	
 	gl_Position = vec4(vertexPosition, 0.0, 1.0);
 }
@@ -218,25 +220,26 @@ GLuint Renderer::quadVao;
 GLuint Renderer::quadVbo;
 GLuint Renderer::regularShader;
 
+constexpr int QUAD_VERTICES_LENGTH = 24;
+float regularVertices[QUAD_VERTICES_LENGTH] = {
+	// First triangle
+	-1.0f,  1.0f, 0.0f, 1.0f,  // Top-left
+	-1.0f, -1.0f, 0.0f, 0.0f,  // Bottom-left
+	 1.0f, -1.0f, 1.0f, 0.0f,  // Bottom-right
+
+	 // Second triangle
+	 -1.0f,  1.0f, 0.0f, 1.0f,  // Top-left
+	  1.0f, -1.0f, 1.0f, 0.0f,  // Bottom-right
+	  1.0f,  1.0f, 1.0f, 1.0f,  // Top-right
+};
+
 void Renderer::init() {
-	float vertices[] = {
-		// First triangle
-		-1.0f,  1.0f, 0.0f, 1.0f,  // Top-left
-		-1.0f, -1.0f, 0.0f, 0.0f,  // Bottom-left
-		 1.0f, -1.0f, 1.0f, 0.0f,  // Bottom-right
-
-		 // Second triangle
-		 -1.0f,  1.0f, 0.0f, 1.0f,  // Top-left
-		  1.0f, -1.0f, 1.0f, 0.0f,  // Bottom-right
-		  1.0f,  1.0f, 1.0f, 1.0f,  // Top-right
-	};
-
 	// create quad vao and quad vbo
 	glGenVertexArrays(1, &quadVao);
 	glBindVertexArray(quadVao);
 	glGenBuffers(1, &quadVbo);
 	glBindBuffer(GL_ARRAY_BUFFER, quadVbo);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(regularVertices), regularVertices, GL_STATIC_DRAW);
 	glEnableVertexAttribArray(0);
 	glVertexAttribPointer(0, 2, GL_FLOAT, false, sizeof(float) * 4, (void*)0);
 	glEnableVertexAttribArray(1);
@@ -248,11 +251,11 @@ void Renderer::init() {
 	glBindVertexArray(tQuadVao);
 	glGenBuffers(1, &tQuadVbo);
 	glBindBuffer(GL_ARRAY_BUFFER, tQuadVbo);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_DYNAMIC_DRAW);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(regularVertices), regularVertices, GL_DYNAMIC_DRAW);
 	glEnableVertexAttribArray(0);
-	glVertexAttribPointer(0, 3, GL_FLOAT, false, sizeof(float) * 5, (void*)0);
+	glVertexAttribPointer(0, 2, GL_FLOAT, false, sizeof(float) * 4, (void*)0);
 	glEnableVertexAttribArray(1);
-	glVertexAttribPointer(1, 2, GL_FLOAT, false, sizeof(float) * 5, (void*)(sizeof(float) * 3));
+	glVertexAttribPointer(1, 2, GL_FLOAT, false, sizeof(float) * 4, (void*)(sizeof(float) * 2));
 	glBindVertexArray(0);
 
 	regularShader = compile_shader(vertexSource, sampleTextureFragSource);
@@ -373,8 +376,32 @@ void Renderer::draw_quad() {
 void Renderer::draw_transformed_quad(float x, float y, float w, float h) {
 	glBindVertexArray(tQuadVao);
 
+	float width = 0.0f, height = 0.0f;
+	{
+		GLint viewport[4];
+		glGetIntegerv(GL_VIEWPORT, viewport);
+		width = static_cast<float>(viewport[2] - viewport[0]);
+		height = static_cast<float>(viewport[3] - viewport[1]);
+	}
+
 	// transform the vertices on the CPU and update the buffer
+	float newVertices[QUAD_VERTICES_LENGTH];
+	memcpy(newVertices, regularVertices, sizeof(regularVertices));
+
+	for (int i = 0; i < QUAD_VERTICES_LENGTH; i += 4) {
+		newVertices[i + 0] = newVertices[i + 0] * (w / width) + (2.0f * x / width) - 1.0f;
+		newVertices[i + 1] = newVertices[i + 1] * (h / height) + (2.0f * y / height) - 1.0f;
+	}
+
+	glBindBuffer(GL_ARRAY_BUFFER, tQuadVbo);
+	glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(regularVertices), newVertices);
+
+	glDisable(GL_DEPTH_TEST);
+	glDisable(GL_CULL_FACE);
 
 	glDrawArrays(GL_TRIANGLES, 0, 6);
 	glBindVertexArray(0);
+
+	glEnable(GL_CULL_FACE);
+	glEnable(GL_DEPTH_TEST);
 }

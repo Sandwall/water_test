@@ -13,20 +13,24 @@
 #include <algorithm>
 
 #include "gl_renderer.h"
-//#include "iwave.h"
-#include "iwave_gpu.h"
+#include "iwave.h"
+//#include "iwave_gpu.h"
 
 #if defined(IWAVESURFACE_GPU)
+// GPU version is still very much incomplete
 #define IWaveSurfaceObject IWaveSurfaceGPU
 #elif defined(IWAVESURFACE_CPU)
 #define IWaveSurfaceObject IWaveSurface
 #endif
 
-int screenWidth = 1280, screenHeight = 720;
-const int divFactor = 8;
+int screenWidth = 640, screenHeight = 360;
+const int divFactor = 4;
 int simWidth = screenWidth / divFactor;
 int simHeight = screenHeight / divFactor;
+bool guiOpen = true;
 
+// currently a leftover from the previous raylib iteration, which had functionality to set target FPS
+// TODO: implement frame limiting, currently the program is limited by refresh rate because of vsync
 constexpr int targetFps = 30;
 constexpr float targetFrameTime = 1.0f / static_cast<float>(targetFps);
 float frameTime = targetFrameTime;
@@ -54,7 +58,7 @@ struct Point2 {
 
 GLFWwindow* window = nullptr;
 
-void imgui_builder();
+void imgui_builder(bool* open);
 
 int do_init();
 void do_cleanup();
@@ -81,20 +85,25 @@ int main(int argc, char** argv) {
 
 		// I'm just gonna use ImGui's input because a proper input system isn't really a priority here...
 		ImGuiIO& io = ImGui::GetIO();
-
+		
+		//
 		// update
+		//
 		Point2 simPos(static_cast<int>(io.MousePos.x) / divFactor, static_cast<int>(io.MousePos.y) / divFactor);
-
 
 		if (!io.WantCaptureMouse) {
 			if (io.MouseDown[0]) {
-				surface.place_source(simPos.x, simPos.y, 5.0f, 1.0f);
+				surface.place_source(simPos.x, simPos.y, 50.0f, 1.0f);
 			} else if (io.MouseDown[2]) {
 				surface.set_obstruction(simPos.x, simPos.y, 2.0f, 0.0f);
 			}
 		}
 
 		if (!io.WantCaptureKeyboard) {
+			if (ImGui::IsKeyPressed(ImGuiKey_Backslash, false)) {
+				guiOpen = !guiOpen;
+			}
+
 			if (ImGui::IsKeyPressed(ImGuiKey_Space, false)) {
 				surface.reset();
 			}
@@ -109,8 +118,8 @@ int main(int argc, char** argv) {
 		ImGui_ImplGlfw_NewFrame();
 		ImGui::NewFrame();
 
-		imgui_builder();
-		surface.imgui_builder();
+		imgui_builder(&guiOpen);
+		surface.imgui_builder(&guiOpen);
 		
 		ImGui::Render();
 
@@ -123,8 +132,8 @@ int main(int argc, char** argv) {
 		glClearColor(1.0, 0.0, 1.0, 1.0);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+		// shader location could be cached...
 		Renderer::uniform_tex(Renderer::regularShader, 0, Renderer::shader_loc(Renderer::regularShader, "inputTexture"));
-		// this could be cached...
 
 		Renderer::bind_tex(0, surface.get_display());
 		Renderer::sampler_settings();
@@ -140,17 +149,20 @@ int main(int argc, char** argv) {
 	return 0;
 }
 
-static inline void imgui_builder() {
+static void imgui_builder(bool* open) {
 	ImGuiIO& io = ImGui::GetIO();
 
-	if (ImGui::Begin("Details")) {
-		ImGui::LabelText("Frame Time", "%f ms", frameTime * 1000.0f);
-		ImGui::LabelText("FPS", "%f fps", frameTime != 0.0f ? 1.0f / frameTime : 0.0f);
-		ImGui::LabelText("Mouse Pos", "%f %f", io.MousePos.x, io.MousePos.y);
-		ImGui::LabelText("LBM Down", io.MouseDown[0] ? "True" : "False");
-		ImGui::LabelText("RBM Down", io.MouseDown[2] ? "True" : "False");
+	if (open && *open) {
+		if (ImGui::Begin("Details"), open) {
+			ImGui::LabelText("Frame Time", "%f ms", frameTime * 1000.0f);
+			ImGui::LabelText("FPS", "%f fps", frameTime != 0.0f ? 1.0f / frameTime : 0.0f);
+			ImGui::LabelText("Mouse Pos", "%f %f", io.MousePos.x, io.MousePos.y);
+			ImGui::LabelText("LBM Down", io.MouseDown[0] ? "True" : "False");
+			ImGui::LabelText("RBM Down", io.MouseDown[2] ? "True" : "False");
+		}
+		ImGui::End();
 	}
-	ImGui::End();
+
 }
 
 // initialization & cleanup functions for organization
@@ -244,7 +256,7 @@ static inline int do_init() {
 	ImGui::StyleColorsDark();
 
 	ImGui_ImplGlfw_InitForOpenGL(window, true);
-	ImGui_ImplOpenGL3_Init("#version 460");
+	ImGui_ImplOpenGL3_Init("#version 460 core");
 
 	return 0;
 }

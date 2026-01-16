@@ -9,7 +9,7 @@ struct TextureTarget {
 	int width, height;
 
 	void init(int w, int h, int format = GL_R32F);
-	void set_target();
+	void set_target() const;
 	void clean();
 
 	void copy_from(const TextureTarget& from);
