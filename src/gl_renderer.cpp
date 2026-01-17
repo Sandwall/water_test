@@ -318,8 +318,8 @@ GLuint Renderer::compile_shader(const char* vs, const char* fs) {
 	GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
 	GLuint fragShader = glCreateShader(GL_FRAGMENT_SHADER);
 
-	GLint vertexLen = strlen(vs);
-	GLint fragLen = strlen(fs);
+	GLint vertexLen = static_cast<GLint>(strlen(vs));
+	GLint fragLen = static_cast<GLint>(strlen(fs));
 
 	glShaderSource(vertexShader, 1, &vs, &vertexLen);
 	glShaderSource(fragShader, 1, &fs, &fragLen);
