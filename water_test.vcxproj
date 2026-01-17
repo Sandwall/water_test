@@ -90,6 +90,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="src\ewave.cpp" />
     <ClCompile Include="src\external\gl3w.c" />
     <ClCompile Include="src\external\imgui.cpp" />
     <ClCompile Include="src\external\imgui_demo.cpp" />
