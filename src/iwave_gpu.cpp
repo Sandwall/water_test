@@ -173,6 +173,29 @@ void main() {
 }
 )";
 
+const char* displayFragSource = /* fragment shader */ R"(
+#version 460 core
+in vec2 fragUv;
+in vec2 screenUv;
+
+out vec4 outValue;
+
+uniform sampler2D currentGrid;
+uniform sampler2D sourceObstruct;
+
+void main() {
+	float gridValue = texture(currentGrid, fragUv).r;
+	vec4 auxValue = texture(sourceObstruct, fragUv);
+
+	outValue = vec4(
+		1.0 - auxValue.g,
+		0.0,
+		(gridValue + 1.0) / 2.0,
+		1.0
+	);
+}
+)";
+
 IWaveSurfaceGPU::IWaveSurfaceGPU(int w, int h, int p) {
 	width = w;
 	height = h;
@@ -189,7 +212,11 @@ IWaveSurfaceGPU::IWaveSurfaceGPU(int w, int h, int p) {
 	kernelRadius = p;
 	kernelTexture = compute_kernel(p);
 
-	// TODO: there are errors with creating the framebuffers... fix
+	display.init(width, height, GL_RGBA8);
+	displayShader = Renderer::compile_shader(Renderer::vertexSource, displayFragSource);
+	d_currentGrid = Renderer::shader_loc(displayShader, "currentGrid");
+	d_sourceObstruct = Renderer::shader_loc(displayShader, "sourceObstruct");
+
 	currentGrid.init(width, height);
 	prevGrid.init(width, height);
 	pingpongGrid.init(width, height);
@@ -405,7 +432,15 @@ void IWaveSurfaceGPU::sim_frame(float delta) {
 	glUniform3f(p3_coefficients, coefficients[0], coefficients[1], coefficients[2]);
 	Renderer::draw_quad();
 
+	// update previous grid
 	prevGrid.copy_from(pingpongGrid);
+
+	// now prepare display texture
+	display.set_target();
+	glUseProgram(displayShader);
+	Renderer::attach_tex(displayShader, d_currentGrid, currentGrid.texture, 0);
+	Renderer::attach_tex(displayShader, d_sourceObstruct, sourceObstruct.texture, 1);
+	Renderer::draw_quad();
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
@@ -415,7 +450,7 @@ void IWaveSurfaceGPU::sim_frame(float delta) {
 }
 
 GLuint IWaveSurfaceGPU::get_display() {
-	return currentGrid.texture;
+	return display.texture;
 }
 
 extern int screenWidth, screenHeight; // from main.cpp

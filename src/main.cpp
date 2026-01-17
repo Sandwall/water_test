@@ -22,15 +22,20 @@
 #define IWaveSurfaceObject IWaveSurface
 #endif
 
+// set to 1 to enable vsync
+// set to 0 to use the manual frametimer
+// 
+#define USE_VSYNC 1
+
 #include "util.hpp"
 
-int screenWidth = 1280, screenHeight = 720;
+int screenWidth = 1080, screenHeight = 1080;
 const int divFactor = 4;
 int simWidth = screenWidth / divFactor;
 int simHeight = screenHeight / divFactor;
 bool guiOpen = true;
 
-float strokeRadius = static_cast<float>(simHeight / 17);
+float strokeRadius = static_cast<float>(simHeight / 15);
 
 constexpr int targetFps = 75;
 constexpr double targetFrameTime = 1.0f / static_cast<double>(targetFps);
@@ -51,7 +56,7 @@ int main(int argc, char** argv) {
 		return -1;
 
 	Renderer::init();
-	IWaveSurfaceObject surface(simWidth, simHeight, 6);
+	IWaveSurfaceObject surface(simWidth, simHeight, 12);
 
 	while (!glfwWindowShouldClose(window)) {
 		double startTime = glfwGetTime();
@@ -123,10 +128,13 @@ int main(int argc, char** argv) {
 		frameTime = glfwGetTime() - startTime;
 		smoothedFrameTime.push(frameTime);
 
+// only use manual frametimer if vsync is disabled
+#if USE_VSYNC != 1
 		if (frameTime < targetFrameTime) {
 			int sleepMs = static_cast<int>(1000.0f * (targetFrameTime - frameTime));
 			ImGui_ImplGlfw_Sleep(sleepMs);
 		}
+#endif
 	}
 
 	do_cleanup();
@@ -137,11 +145,14 @@ static void imgui_builder(bool* open) {
 	ImGuiIO& io = ImGui::GetIO();
 
 	if (open && *open) {
+		double smoothTime = smoothedFrameTime.get();
+
 		if (ImGui::Begin("Details"), open, ImGuiWindowFlags_AlwaysAutoResize) {
 			ImGui::LabelText("Render Frame Time", "%f ms", frameTime * 1000.0);
-			ImGui::LabelText("Smooth Frame Time", "%f ms", smoothedFrameTime.get() * 1000.0);
+			ImGui::LabelText("Smooth Frame Time", "%f ms", smoothTime * 1000.0);
 			ImGui::LabelText("Target Frame Time", "%f ms", targetFrameTime * 1000.0);
 			ImGui::LabelText("Render FPS", "%f fps", frameTime != 0.0f ? 1.0f / frameTime : 0.0f);
+			ImGui::LabelText("Smooth FPS", "%f fps", smoothTime != 0.0f ? 1.0f / smoothTime : 0.0f);
 			ImGui::LabelText("Target FPS", "%d fps", targetFps);
 			ImGui::LabelText("Mouse Pos", "%f %f", io.MousePos.x, io.MousePos.y);
 			ImGui::LabelText("LBM Down", io.MouseDown[0] ? "True" : "False");
@@ -214,7 +225,7 @@ static inline int do_init() {
 
 	glfwSetWindowAttrib(window, GLFW_RESIZABLE, GLFW_FALSE);
 	glfwMakeContextCurrent(window);
-	glfwSwapInterval(0);
+	glfwSwapInterval(USE_VSYNC);
 
 	if (gl3wInit()) {
 		fprintf(stderr, "Error: GL3W initialization failed!\n");

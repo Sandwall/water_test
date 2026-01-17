@@ -11,6 +11,10 @@
 class IWaveSurfaceGPU : public SurfaceSim {
 	int width = 0, height = 0;
 
+	TextureTarget display;
+	GLuint displayShader;
+	GLint d_currentGrid, d_sourceObstruct;
+
 	// there are more than 2 grids for pingpong rendering
 	TextureTarget currentGrid, prevGrid, pingpongGrid;
 	TextureTarget verticalDerivative;
@@ -21,19 +25,21 @@ class IWaveSurfaceGPU : public SurfaceSim {
 
 	// for mutating auxiliary data (sourceObstruct)
 	GLuint drawAuxShader;
+	GLint n1_sourceObstruct, n1_maxValue;
+
 	GLuint progressSoShader;
+	GLint n2_sourceObstruct, n2_speed;
 
 	// progresses the simulation
 	GLuint preprocessShader;
-	GLuint convolutionShader;
-	GLuint propagateShader;
-
-	GLint n1_sourceObstruct, n1_maxValue;
-	GLint n2_sourceObstruct, n2_speed;
-
 	GLint p1_currentGrid, p1_sourceObstruct;
+	
+	GLuint convolutionShader;
 	GLint p2_currentGrid, p2_kernel, p2_kernelCellSize, p2_gridCellSize, p2_kernelRadius;
+	
+	GLuint propagateShader;
 	GLint p3_currentGrid, p3_prevGrid, p3_verticalDerivative, p3_coefficients;
+
 	
 	int kernelRadius = 0;
 	unsigned int kernelTexture;
