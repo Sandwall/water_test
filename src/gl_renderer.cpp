@@ -56,14 +56,9 @@ void TextureTarget::clean() {
 	framebuffer = 0;
 }
 
-// TODO(important!): this is definitely a problem function
-// it looks like if you bind the framebuffer as GL_READ_BUFFER we get the expected output, but a 1280 error
-// but if you bind it as GL_FRAMEBUFFER, you get no 1280 error, but the expected behavior only occurs on a small line horizontal line strip
-// in the center of the framebuffer... why?? maybe it has to do with UV flipping? we can try to use the copy shader from before if this doesn't work...
 void TextureTarget::copy_from(const TextureTarget& from) {
 	glCopyImageSubData(from.texture, GL_TEXTURE_2D, 0, 0, 0, 0, texture, GL_TEXTURE_2D, 0, 0, 0, 0, width, height, 1);
 }
-
 
 // we probably won't use all of these texture formats, but the initialization for them are here if we ever do
 int Renderer::byte_size(int format, int type) {
@@ -387,15 +382,9 @@ void Renderer::attach_tex(GLuint shader, GLint location, GLuint texture, GLuint 
 }
 
 void Renderer::draw_quad() {
-	//glDisable(GL_DEPTH_TEST);
-	//glDisable(GL_CULL_FACE);
-
 	glBindVertexArray(quadVao);
 	glDrawArrays(GL_TRIANGLES, 0, 6);
 	glBindVertexArray(0);
-	
-	//glEnable(GL_CULL_FACE);
-	//glEnable(GL_DEPTH_TEST);
 }
 
 void Renderer::draw_transformed_quad(float x, float y, float w, float h) {
