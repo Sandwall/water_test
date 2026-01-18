@@ -29,7 +29,7 @@
 
 #include "util.hpp"
 
-int screenWidth = 1080, screenHeight = 1080;
+int screenWidth = 1280, screenHeight = 720;
 const int divFactor = 4;
 int simWidth = screenWidth / divFactor;
 int simHeight = screenHeight / divFactor;
@@ -83,7 +83,7 @@ int main(int argc, char** argv) {
 			}
 		}
 
-		if (!io.WantCaptureKeyboard) {
+		if (!io.WantTextInput) {
 			if (ImGui::IsKeyPressed(ImGuiKey_Backslash, false)) {
 				guiOpen = !guiOpen;
 			}
@@ -109,7 +109,9 @@ int main(int argc, char** argv) {
 		
 		ImGui::Render();
 
-		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+		// I'm guessing that ImGui::Render binds framebuffer to 0 already, which means that this is redundant
+		//glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
 		glfwGetFramebufferSize(window, &screenWidth, &screenHeight);
 		glViewport(0, 0, screenWidth, screenHeight);
 		glClearColor(1.0, 0.0, 1.0, 1.0);

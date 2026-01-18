@@ -178,8 +178,8 @@ void Renderer::get_format_info(int internalFormat, int& dataFormat, int& dataTyp
 const char* Renderer::vertexSource = /* vertex shader */ R"(
 #version 460 core
 
-in vec2 vertexPosition;
-in vec2 vertexTexCoord;
+layout (location = 0) in vec2 vertexPosition;
+layout (location = 1) in vec2 vertexTexCoord;
 
 out vec2 fragUv;
 out vec2 screenUv;
@@ -196,8 +196,8 @@ void main() {
 const char* Renderer::flippedVertexSource = /* vertex shader */ R"(
 #version 460 core
 
-in vec2 vertexPosition;
-in vec2 vertexTexCoord;
+layout (location = 0) in vec2 vertexPosition;
+layout (location = 1) in vec2 vertexTexCoord;
 
 out vec2 fragUv;
 out vec2 screenUv;

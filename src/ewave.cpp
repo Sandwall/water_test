@@ -36,5 +36,5 @@ void EWaveSurface::reset() {
 }
 
 GLuint EWaveSurface::get_display() {
-
+	return 0;
 }
