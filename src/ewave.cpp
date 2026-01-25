@@ -27,6 +27,8 @@ void EWaveSurface::set_obstruction(int x, int y, float r, float strength) {
 
 }
 
+// the simulation happens entirely in fourier space, which means that get_display
+// has to do an inverse fourier transform to get back to spatial data
 void EWaveSurface::sim_frame(float delta) {
 
 }
@@ -36,5 +38,7 @@ void EWaveSurface::reset() {
 }
 
 GLuint EWaveSurface::get_display() {
+
+
 	return 0;
 }

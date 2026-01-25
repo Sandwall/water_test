@@ -2,15 +2,16 @@
 
 #include <GL/glcorearb.h> // for GL types
 
-
 struct TextureTarget {
 	GLuint framebuffer;
 	GLuint texture;
 	int width, height;
 
 	void init(int w, int h, int format = GL_R32F);
-	void set_target() const;
 	void clean();
+
+	static void reset_target();
+	void set_target() const;
 
 	void copy_from(const TextureTarget& from);
 };
@@ -37,7 +38,12 @@ public:
 	// used to organize a few opengl calls
 	static void sampler_settings();
 	static GLuint create_tex(int w, int h, int format = GL_R32F, const void* data = nullptr);
+
+	// for vertex/fragment pipelines
 	static GLuint compile_shader(const char* vs, const char* fs);
+
+	// for compute pipelines
+	static GLuint compile_shader(const char* cs);
 	
 	static GLint shader_loc(GLuint shader, const char* location);
 

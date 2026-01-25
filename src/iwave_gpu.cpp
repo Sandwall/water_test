@@ -330,7 +330,8 @@ void IWaveSurfaceGPU::draw_aux(int x, int y, float r, float v1, float v2) {
 	glEnable(GL_DEPTH_TEST);
 
 	glUseProgram(0);
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+	TextureTarget::reset_target();
 }
 
 void IWaveSurfaceGPU::place_source(int x, int y, float r, float strength) {
@@ -361,7 +362,7 @@ void IWaveSurfaceGPU::reset() {
 	pingpongSO.set_target();
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	TextureTarget::reset_target();
 }
 
 void IWaveSurfaceGPU::sim_frame(float delta) {
@@ -435,14 +436,7 @@ void IWaveSurfaceGPU::sim_frame(float delta) {
 	// update previous grid
 	prevGrid.copy_from(pingpongGrid);
 
-	// now prepare display texture
-	display.set_target();
-	glUseProgram(displayShader);
-	Renderer::attach_tex(displayShader, d_currentGrid, currentGrid.texture, 0);
-	Renderer::attach_tex(displayShader, d_sourceObstruct, sourceObstruct.texture, 1);
-	Renderer::draw_quad();
-
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	TextureTarget::reset_target();
 
 	glEnable(GL_CULL_FACE);
 	glEnable(GL_BLEND);
@@ -450,6 +444,22 @@ void IWaveSurfaceGPU::sim_frame(float delta) {
 }
 
 GLuint IWaveSurfaceGPU::get_display() {
+	glDisable(GL_DEPTH_TEST);
+	glDisable(GL_BLEND);
+	glDisable(GL_CULL_FACE);
+
+	display.set_target();
+	glUseProgram(displayShader);
+	Renderer::attach_tex(displayShader, d_currentGrid, currentGrid.texture, 0);
+	Renderer::attach_tex(displayShader, d_sourceObstruct, sourceObstruct.texture, 1);
+	Renderer::draw_quad();
+
+	TextureTarget::reset_target();
+
+	glEnable(GL_CULL_FACE);
+	glEnable(GL_BLEND);
+	glEnable(GL_DEPTH_TEST);
+
 	return display.texture;
 }
 

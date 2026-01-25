@@ -1,5 +1,7 @@
 #pragma once
 
+// here is stuff not dependent on any headers
+
 template <typename T, unsigned int N>
 class RollingAverageSmoother {
 	T samples[N];
@@ -33,19 +35,5 @@ public:
 
 		for (int i = 0; i < N; i++)
 			samples[i] = 0;
-	}
-};
-
-struct Point2 {
-	int x, y;
-
-	Point2() {
-		x = 0;
-		y = 0;
-	}
-
-	Point2(int px, int py) {
-		x = px;
-		y = py;
 	}
 };

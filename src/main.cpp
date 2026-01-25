@@ -73,13 +73,14 @@ int main(int argc, char** argv) {
 		//
 		// update
 		//
-		Point2 simPos(static_cast<int>(io.MousePos.x) / divFactor, static_cast<int>(io.MousePos.y) / divFactor);
+		int simX = static_cast<int>(io.MousePos.x) / divFactor;
+		int simY = static_cast<int>(io.MousePos.y) / divFactor;
 
 		if (!io.WantCaptureMouse) {
 			if (io.MouseDown[0]) {
-				surface.place_source(simPos.x, simPos.y, strokeRadius, 1.0f);
+				surface.place_source(simX, simY, strokeRadius, 1.0f);
 			} else if (io.MouseDown[1]) {
-				surface.set_obstruction(simPos.x, simPos.y, strokeRadius, 1.0f);
+				surface.set_obstruction(simX, simY, strokeRadius, 1.0f);
 			}
 		}
 

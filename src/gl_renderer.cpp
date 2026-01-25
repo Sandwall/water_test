@@ -1,5 +1,6 @@
 #include "gl_renderer.h"
 
+
 #include <GL/gl3w.h>
 #include <stdio.h>
 #include <stdint.h>
@@ -38,7 +39,13 @@ void TextureTarget::init(int w, int h, int format) {
 		break;
 	}
 
+	TextureTarget::reset_target();
+}
+
+extern int screenWidth, screenHeight; // from main.cpp
+void TextureTarget::reset_target() {
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	glViewport(0, 0, screenWidth, screenHeight);
 }
 
 void TextureTarget::set_target() const {
@@ -354,6 +361,36 @@ GLuint Renderer::compile_shader(const char* vs, const char* fs) {
 	glDeleteShader(vertexShader);
 	glDeleteShader(fragShader);
 
+	return program;
+}
+
+GLuint Renderer::compile_shader(const char* cs) {
+	GLuint computeShader = glCreateShader(GL_COMPUTE_SHADER);
+
+	GLint computeLen = static_cast<GLint>(strlen(cs));
+	
+	glShaderSource(computeShader, 1, &cs, &computeLen);
+	glCompileShader(computeShader);
+	
+	GLint success;
+	glGetShaderiv(computeShader, GL_COMPILE_STATUS, &success);
+	if (GL_TRUE != success) {
+		glGetShaderInfoLog(computeShader, 1024, nullptr, compilationLog);
+		fprintf(stderr, "ERROR: Compute shader compilation failed!\n\t%s\n", compilationLog);
+	}
+	
+	GLuint program = glCreateProgram();
+	
+	glAttachShader(program, computeShader);
+	glLinkProgram(program);
+	
+	glGetProgramiv(program, GL_LINK_STATUS, &success);
+	if (GL_TRUE != success) {
+		glGetProgramInfoLog(program, 1024, nullptr, compilationLog);
+		fprintf(stderr, "ERROR: Compute shader linking failed!\n\t%s\n", compilationLog);
+	}
+	
+	glDeleteShader(computeShader);
 	return program;
 }
 

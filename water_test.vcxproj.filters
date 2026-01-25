@@ -54,6 +54,12 @@
     <ClCompile Include="src\ewave.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\smath.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\surface_draw.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\external\imstb_truetype.h">
@@ -99,6 +105,12 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\util.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\smath.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\surface_draw.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

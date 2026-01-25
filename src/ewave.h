@@ -1,11 +1,15 @@
 #pragma once
 
 #include "surface_sim.h"
+#include "gl_renderer.h"
 
-// TODO: I'll get to this eventually
 // https://people.computing.clemson.edu/~jtessen/students/goswami_thesis.pdf
 class EWaveSurface : SurfaceSim {
 	int width, height;
+
+
+	TextureTarget inversedGrid;
+
 public:
 	EWaveSurface(int w, int h);
 	~EWaveSurface();
