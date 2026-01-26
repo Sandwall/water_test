@@ -57,7 +57,7 @@ struct Matrix4 {
 
 	static Matrix4 transform(float tx, float ty, float tz,
 		float rx, float ry, float rz,
-		float sx, float sy, float sz);5
+		float sx, float sy, float sz);
 
 };
 
@@ -145,9 +145,21 @@ private:
 };
 
 namespace smath {
+	static constexpr float pi = 3.1415926535f;
+	static constexpr float tau = pi * 2.0f;
+
+	void init();
+	void cleanup();
+
+	// 1D versions
 	void dst(size_t len, float* output, const float* input);
 	void dct(size_t len, float* output, const float* input);
 	void dft(size_t len, Complex* output, const Complex* input);
+
+	// 2D versions O(n^4) time (super duper terrible)
+	void dst(size_t x, size_t y, float* output, const float* input);
+	void dct(size_t x, size_t y, float* output, const float* input);
+	void dft(size_t x, size_t y, Complex* output, const Complex* input);
 	
 	// cooley-tukey algorithm
 	void fst(size_t len, float* output, const float* input);

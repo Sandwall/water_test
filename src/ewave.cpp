@@ -13,6 +13,8 @@
 #define SETZERO(x) memset(x, 0, bufferSize)
 
 EWaveSurface::EWaveSurface(int w, int h) {
+	width = w;
+	height = h;
 
 }
 

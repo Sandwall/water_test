@@ -24,7 +24,7 @@ class IWaveSurface : public SurfaceSim {
 
 	// for display
 	uint32_t* waterPixels = nullptr;
-	unsigned int waterTexture;
+	GLuint waterTexture;
 
 	int get_idx(int x, int y) const;
 	int get_kernel_reflected_idx(int x, int y) const;

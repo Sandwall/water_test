@@ -13,23 +13,28 @@
 #include <algorithm>
 
 #include "gl_renderer.h"
+#include "smath.h"
+
+//#include "ewave.h"
 //#include "iwave.h"
 #include "iwave_gpu.h"
 
 #if defined(IWAVESURFACE_GPU)
-#define IWaveSurfaceObject IWaveSurfaceGPU
+#define SurfaceObject IWaveSurfaceGPU
 #elif defined(IWAVESURFACE_CPU)
-#define IWaveSurfaceObject IWaveSurface
+#define SurfaceObject IWaveSurface
+#elif defined(EWAVESURFACE_CPU)
+#define SurfaceObject EWaveSurface
 #endif
 
 // set to 1 to enable vsync
 // set to 0 to use the manual frametimer
 // 
-#define USE_VSYNC 1
+#define USE_VSYNC 0
 
 #include "util.hpp"
 
-int screenWidth = 1280, screenHeight = 720;
+int screenWidth = 720, screenHeight = 720;
 const int divFactor = 4;
 int simWidth = screenWidth / divFactor;
 int simHeight = screenHeight / divFactor;
@@ -55,8 +60,10 @@ int main(int argc, char** argv) {
 	if (0 != do_init())
 		return -1;
 
+	smath::init();
 	Renderer::init();
-	IWaveSurfaceObject surface(simWidth, simHeight, 12);
+
+	SurfaceObject surface(simWidth, simHeight, 12);
 
 	while (!glfwWindowShouldClose(window)) {
 		double startTime = glfwGetTime();
@@ -141,6 +148,8 @@ int main(int argc, char** argv) {
 	}
 
 	do_cleanup();
+	smath::cleanup();
+
 	return 0;
 }
 

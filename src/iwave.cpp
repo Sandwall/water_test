@@ -6,6 +6,7 @@
 
 #include <GL/gl3w.h>
 #include "gl_renderer.h"
+#include "smath.h"
 
 // NOTE: i'm lazy lol
 #define DOALLOC static_cast<float*>(malloc(bufferSize))
@@ -201,6 +202,10 @@ static float move_towards(float current, float target, float step) {
 	else
 		return current;
 }
+
+struct Point2 {
+	int x, y;
+};
 
 void IWaveSurface::sim_frame(float delta) {
 	// preprocess sources/obstructions

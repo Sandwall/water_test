@@ -1,13 +1,11 @@
 #include "smath.h"
 
-#define _USE_MATH_DEFINES
-#include <math.h>
 #include <type_traits>
+#include <bit>
 
-template <typename T> requires std::is_integral_v<T>
-static inline bool is_power_of_2(T val) {
-	return val & (val - 1);
-}
+//
+// Structures
+//
 
 Matrix4::Matrix4(float diag) {
 	for (int i = 0; i < 16; ++i)
@@ -147,6 +145,40 @@ Matrix4 Matrix4::transform(float tx, float ty, float tz,
 }
 
 namespace smath {
+	void* intermediateBuffer = nullptr;
+	static constexpr size_t BUFFER_SIZE_COMPLEX = 1 << 16;
+	static constexpr size_t BUFFER_SIZE_FLOAT = BUFFER_SIZE_COMPLEX * 2;
+
+	void init() {
+		intermediateBuffer = malloc(sizeof(Complex) * BUFFER_SIZE_COMPLEX);
+	}
+
+	void cleanup() {
+		free(intermediateBuffer);
+		intermediateBuffer = nullptr;
+	}
+
+	// Transpose functions for 2D float and Complex arrays
+
+	void transpose(size_t x, size_t y, float* matrix) {
+		for (int iy = 0; iy < y; iy++) {
+			for (size_t ix = iy + 1; ix < x; ix++) {
+
+			}
+		}
+	}
+
+	void transpose(size_t x, size_t y, Complex* matrix) {
+
+	}
+
+	//
+	// Regular Discrete Fourier Transform functions
+	// These only exist because I haven't implemented an FFT yet, but I'd still like to work on 
+	// parts of the project that require some sort of Fourier Transform routine.
+	//
+
+	// 1D Discrete Sine Transform
 	void dst(size_t len, float* output, float* input) {
 		const float invLen = 1.0f / static_cast<float>(len);
 
@@ -154,12 +186,13 @@ namespace smath {
 			output[i] = 0;
 
 			for (size_t j = 0; j < len; j++) {
-				float angle = -2.0f * M_PI * static_cast<float>(i * j) * invLen;
+				float angle = -smath::tau * static_cast<float>(i * j) * invLen;
 				output[i] += input[j] * sinf(angle);
 			}
 		}
 	}
 
+	// 1D Discrete Cosine Transform
 	void dct(size_t len, float* output, float* input) {
 		const float invLen = 1.0f / static_cast<float>(len);
 
@@ -167,12 +200,13 @@ namespace smath {
 			output[i] = 0;
 
 			for (size_t j = 0; j < len; j++) {
-				float angle = -2.0f * M_PI * static_cast<float>(i * j) * invLen;
+				float angle = -smath::tau * static_cast<float>(i * j) * invLen;
 				output[i] += input[j] * cosf(angle);
 			}
 		}
 	}
 
+	// 1D Discrete Fourier Transform
 	void dft(size_t len, Complex* output, const Complex* input) {
 		const float invLen = 1.0f / static_cast<float>(len);
 
@@ -180,30 +214,92 @@ namespace smath {
 			output[i] = 0;
 
 			for (size_t j = 0; j < len; j++) {
-				float angle = -2.0f * M_PI * static_cast<float>(i * j) * invLen;
-				Complex w(cosf(angle), sinf(angle));
-				output[i] += input[j] * w;
+				float angle = -smath::tau * static_cast<float>(i * j) * invLen;
+				Complex twiddleFactor(cosf(angle), sinf(angle));
+				output[i] += input[j] * twiddleFactor;
 			}
 		}
 	}
 
+	// 2D Discrete Sine Transform
+	void dst(size_t x, size_t y, float* output, float* input) {
+		float* intermediate = static_cast<float*>(intermediateBuffer);
+
+		// Horizontal Pass
+		for (size_t iy = 0; iy < y; iy++) {
+			const size_t start = iy * x;
+			dst(x, intermediate, &input[start]);
+		}
+
+		transpose(x, y, intermediate);
+		
+		// Vertical Pass
+		for (size_t iy = 0; iy < y; iy++) {
+			const size_t start = iy * x;
+			dst(x, &output[start], intermediate);
+		}
+
+		transpose(x, y, output);
+	}
+
+	// 2D Discrete Cosine Transform
+	//void dct(size_t x, size_t y, float* output, float* input) {
+
+	//	for (size_t i = 0; i < len; i++) {
+	//		output[i] = 0;
+
+	//		for (size_t j = 0; j < len; j++) {
+	//			float angle = -2.0f * M_PI * static_cast<float>(i * j) * invLen;
+	//			output[i] += input[j] * cosf(angle);
+	//		}
+	//	}
+	//}
+
+	//// 2D Discrete Fourier Transform
+	//void dft(size_t x, size_t y, Complex* output, const Complex* input) {
+	//	const float invLen = 1.0f / static_cast<float>(len);
+
+	//	for (size_t i = 0; i < len; i++) {
+	//		output[i] = 0;
+
+	//		for (size_t j = 0; j < len; j++) {
+	//			float angle = -2.0f * M_PI * static_cast<float>(i * j) * invLen;
+	//			Complex twiddleFactor(cosf(angle), sinf(angle));
+	//			output[i] += input[j] * twiddleFactor;
+	//		}
+	//	}
+	//}
+
+	template <typename T> requires std::is_integral_v<T>
+	static inline bool is_power_of_2(T val) {
+		return (val >= 0) && (0 == (val & (val - 1)));
+	}
+
+	template <typename T> requires std::is_integral_v<T>
+	static inline int log2i(T val) {
+		if (val <= 0) return 0;
+		return std::bit_width(val) - 1;
+	}
+
+	template <typename T> requires std::is_integral_v<T>
+	static inline T pow2i(T val) {
+		if (val < 0) return 0;
+		if (val == 0) return 1;
+
+		return 1 << val;
+	}
+
 	// TODO: need to implement this
 	void fst(size_t len, float* output, const float* input) {
-		if (!is_power_of_2(len)) return;
+		int iterations = log2i(len);
+		if (iterations < 0) return;
 
-		if (len == 1) {
-			output[0] = input[0];
-			return;
-		}
+		float invLen = 1.0f / static_cast<float>(len);
 
 		for (size_t i = 0; i < len; i++) {
+			for (size_t j = 0; j < iterations; j++) {
 
+			}
 		}
 	}
-
-	// TODO: will get to this when fst above is done
-	void fft(size_t len, Complex* output, const Complex* input) {
-		if (!is_power_of_2(len)) return;
-	}
-
 }
